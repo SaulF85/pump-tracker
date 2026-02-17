@@ -1,117 +1,154 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <title>Frac Pump Tracker (24 Pumps)</title>
+  <title>Frac Pump Tracker (High/Low + Boards)</title>
   <meta charset="utf-8" />
   <style>
-    body { font-family: Arial, sans-serif; background:#111; color:#fff; padding:20px; }
-    h1 { text-align:center; margin-bottom: 10px; }
-    .sub { text-align:center; color:#bbb; margin-bottom: 18px; }
+    body { font-family: Arial, sans-serif; background:#111; color:#fff; padding:18px; }
+    h1 { text-align:center; margin: 6px 0 4px; }
+    .sub { text-align:center; color:#bbb; margin-bottom:14px; font-size:13px; }
+
+    .top{
+      display:grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      gap:12px;
+      margin-bottom:14px;
+    }
+    .board{
+      background:#151515;
+      border:1px solid #333;
+      border-radius:10px;
+      padding:10px;
+      min-height:120px;
+    }
+    .board h3{ margin:0 0 8px 0; font-size:14px; }
+    .board .hint{ color:#aaa; font-size:12px; margin-bottom:8px; }
+    .chip{
+      background:#1e1e1e;
+      border:1px solid #2d2d2d;
+      border-radius:10px;
+      padding:8px;
+      margin:8px 0;
+      font-size:12px;
+      line-height: 1.25;
+    }
+    .chip .tag{
+      display:inline-block;
+      font-size:11px;
+      padding:2px 6px;
+      border-radius:999px;
+      border:1px solid #444;
+      margin-right:6px;
+      color:#ddd;
+    }
+    .chip .tag.overdue{ border-color:#ff4d4d; }
+    .chip .tag.soon{ border-color:#ffcc00; }
+    .chip .tag.reset{ border-color:#66d9ff; }
+    .chip .muted{ color:#aaa; }
+
+    .layout{
+      display:grid;
+      grid-template-columns: 1fr 1fr;
+      gap:14px;
+    }
+    .column{
+      background:#151515;
+      border:1px solid #333;
+      border-radius:10px;
+      padding:10px;
+    }
+    .col-title{
+      text-align:center;
+      font-weight:bold;
+      font-size:18px;
+      margin:4px 0 10px;
+    }
+    .low { border:2px solid #0077ff; }
+    .high { border:2px solid #ff9900; }
 
     .pump-grid{
       display:grid;
-      grid-template-columns: repeat(3, 1fr);
-      gap:16px;
+      grid-template-columns: repeat(2, 1fr);
+      gap:10px;
     }
-
     .pump-card{
       background:#1e1e1e;
       border:1px solid #333;
       border-radius:10px;
-      padding:14px;
+      padding:10px;
+      font-size:12px;
     }
-
-    .running { border:2px solid lime; }
+    .running{ border:2px solid lime; }
 
     button{
       margin:6px 6px 0 0;
-      padding:6px 10px;
+      padding:5px 8px;
+      font-size:12px;
       cursor:pointer;
-      border-radius:6px;
+      border-radius:7px;
       border:1px solid #444;
       background:#222;
       color:#fff;
     }
     button:hover{ background:#2a2a2a; }
+    .tiny{ color:#aaa; font-size:11px; }
+    .row{ display:flex; gap:10px; align-items:center; flex-wrap:wrap; }
+    .row strong{ font-size:13px; }
 
-    .tiny { font-size:12px; color:#bbb; }
-
-    .log{
+    .maint{
       margin-top:10px;
-      font-size:12px;
-      max-height:110px;
-      overflow-y:auto;
-      background:#151515;
-      padding:8px;
-      border-radius:8px;
-      border:1px solid #2a2a2a;
-    }
-
-    .maint-wrap{
-      margin-top:10px;
-      background:#171717;
-      border:1px solid #2a2a2a;
-      border-radius:10px;
-      padding:10px;
-    }
-
-    .maint-title{ font-weight:bold; margin-bottom:8px; }
-
-    .maint-grid{
-      display:grid;
-      grid-template-columns: repeat(3, 1fr);
-      gap:10px;
-    }
-
-    .maint-box{
       background:#141414;
       border:1px solid #2a2a2a;
+      border-radius:10px;
+      padding:8px;
+    }
+    .maint-grid{
+      display:grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      gap:8px;
+      margin-top:8px;
+    }
+    .box{
+      background:#121212;
+      border:1px solid #2a2a2a;
       border-radius:8px;
       padding:8px;
     }
-
+    .box-title{ font-weight:bold; margin-bottom:6px; font-size:12px; }
     .item{
       display:flex;
       justify-content:space-between;
       align-items:center;
       gap:8px;
-      margin:6px 0;
-      padding-bottom:6px;
+      padding:6px 0;
       border-bottom:1px solid #222;
     }
-    .item:last-child{ border-bottom:none; padding-bottom:0; }
-
+    .item:last-child{ border-bottom:none; }
     .left{
       display:flex;
       align-items:center;
       gap:8px;
-      min-width: 0;
+      min-width:0;
     }
-
     .name{
+      max-width:110px;
       white-space:nowrap;
       overflow:hidden;
       text-overflow:ellipsis;
-      max-width: 140px;
+    }
+    input[type="checkbox"]{ transform: scale(1.1); cursor:pointer; }
+    .item button{ margin:0; padding:4px 8px; font-size:11px; }
+
+    .footer{
+      margin-top:12px;
+      text-align:center;
+      color:#777;
+      font-size:11px;
     }
 
-    .item button{
-      margin:0;
-      padding:4px 8px;
-      font-size:12px;
-      white-space:nowrap;
-    }
-
-    input[type="checkbox"]{
-      transform: scale(1.1);
-      cursor:pointer;
-    }
-
-    @media (max-width: 1200px){
-      .pump-grid{ grid-template-columns: repeat(2, 1fr); }
-      .maint-grid{ grid-template-columns: repeat(2, 1fr); }
-    }
-    @media (max-width: 700px){
+    @media (max-width: 1100px){
+      .top{ grid-template-columns: 1fr; }
+      .layout{ grid-template-columns: 1fr; }
       .pump-grid{ grid-template-columns: 1fr; }
       .maint-grid{ grid-template-columns: 1fr; }
       .name{ max-width: 220px; }
@@ -121,195 +158,380 @@
 <body>
 
 <h1>Frac Pump Tracker</h1>
-<div class="sub">24 pumps • runtime-based hours • Seats/Valves/Packings tracked individually (5 each)</div>
+<div class="sub">VERSION: 24-PUMPS + BOARDS • Auto-saves in browser • Low Side (left) / High Side (right)</div>
 
-<div class="pump-grid" id="pumpGrid"></div>
+<div class="top">
+  <div class="board" id="boardOverdue">
+    <h3>Overdue</h3>
+    <div class="hint">Items past threshold (Seats/Valves/Packings)</div>
+    <div id="overdueList" class="tiny">Loading…</div>
+  </div>
+  <div class="board" id="boardSoon">
+    <h3>Due Soon</h3>
+    <div class="hint">Within “warning window” hours of threshold</div>
+    <div id="soonList" class="tiny">Loading…</div>
+  </div>
+  <div class="board" id="boardReset">
+    <h3>Recently Reset</h3>
+    <div class="hint">Last 10 maintenance resets</div>
+    <div id="resetList" class="tiny">Loading…</div>
+  </div>
+</div>
+
+<div class="layout">
+  <div class="column low">
+    <div class="col-title">LOW SIDE</div>
+    <div class="pump-grid" id="lowSide"></div>
+  </div>
+
+  <div class="column high">
+    <div class="col-title">HIGH SIDE</div>
+    <div class="pump-grid" id="highSide"></div>
+  </div>
+</div>
+
+<div class="footer">
+  Tip: If GitHub Pages “won’t update”, hard refresh the live page (Ctrl+F5) or open in Incognito.
+</div>
 
 <script>
-  const pumpCount = 24;
+/* ------------------ SETTINGS ------------------ */
+const STORAGE_KEY = "frac_pump_tracker_v3";
 
-  function createItems(label, count){
-    return Array.from({length: count}, (_, i) => ({
-      name: `${label} ${i+1}`,
-      hours: 0,
-      active: true // default active; uncheck if not installed / not being tracked
-    }));
+// thresholds (hours)
+const THRESH = {
+  seat: 250,
+  valve: 250,
+  packing: 150
+};
+
+// warning window (hours before threshold)
+const WARN_WINDOW = 20;
+
+const pumpCount = 24;
+
+/* ------------------ DATA MODEL ------------------ */
+function createItems(label, count){
+  return Array.from({length: count}, (_, i) => ({
+    name: `${label} ${i+1}`,
+    hours: 0,
+    active: true
+  }));
+}
+
+function createPump(id){
+  return {
+    id,
+    totalHours: 0,
+    running: false,
+    lastStart: null,
+    side: (id <= 12) ? "Low" : "High",
+    seats: createItems("Seat", 5),
+    valves: createItems("Valve", 5),
+    packings: createItems("Packing", 5)
+  };
+}
+
+let state = {
+  pumps: Array.from({length: pumpCount}, (_, i) => createPump(i+1)),
+  resetLog: [] // {ts, pumpId, side, itemLabel}
+};
+
+/* ------------------ PERSISTENCE ------------------ */
+function save(){
+  try{
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+  }catch(e){
+    console.warn("Save failed:", e);
   }
+}
+function load(){
+  try{
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if(!raw) return;
+    const parsed = JSON.parse(raw);
 
-  function createPump(id){
-    return {
-      id,
-      totalHours: 0,
-      running: false,
-      orientation: "High Side",
-      lastStart: null,
+    // Basic shape validation + repair
+    if(parsed && Array.isArray(parsed.pumps) && parsed.pumps.length === pumpCount){
+      state = parsed;
 
-      seats: createItems("Seat", 5),
-      valves: createItems("Valve", 5),
-      packings: createItems("Packing", 5),
+      // if any pump missing fields, patch
+      state.pumps.forEach((p, idx) => {
+        p.id ??= (idx+1);
+        p.side ??= (p.id <= 12 ? "Low" : "High");
+        p.totalHours ??= 0;
+        p.running ??= false;
+        p.lastStart ??= null;
 
-      logs: []
-    };
+        p.seats ??= createItems("Seat", 5);
+        p.valves ??= createItems("Valve", 5);
+        p.packings ??= createItems("Packing", 5);
+
+        // ensure each group has 5
+        ["seats","valves","packings"].forEach(g=>{
+          if(!Array.isArray(p[g]) || p[g].length !== 5){
+            const label = g === "seats" ? "Seat" : g === "valves" ? "Valve" : "Packing";
+            p[g] = createItems(label, 5);
+          } else {
+            p[g].forEach((it, i) => {
+              it.name ??= `${g.slice(0,-1)} ${i+1}`;
+              it.hours ??= 0;
+              it.active = (it.active !== false); // default true
+            });
+          }
+        });
+      });
+
+      state.resetLog ??= [];
+    }
+  }catch(e){
+    console.warn("Load failed:", e);
   }
+}
 
-  const pumps = Array.from({length: pumpCount}, (_, i) => createPump(i+1));
+/* ------------------ HELPERS ------------------ */
+function fmt(h){ return (Math.round(h*100)/100).toFixed(2); }
 
-  function formatHours(h){ return (Math.round(h * 100) / 100).toFixed(2); }
+function currentTotal(p){
+  if(!p.running) return p.totalHours;
+  return p.totalHours + (Date.now() - p.lastStart) / (1000*60*60);
+}
 
-  function log(p, msg){
-    p.logs.push(`${new Date().toLocaleString()} — ${msg}`);
-    if (p.logs.length > 80) p.logs.shift();
-  }
+function addRunHours(p, hours){
+  p.totalHours += hours;
+  p.seats.forEach(x => { if(x.active) x.hours += hours; });
+  p.valves.forEach(x => { if(x.active) x.hours += hours; });
+  p.packings.forEach(x => { if(x.active) x.hours += hours; });
+}
 
-  function addRunHours(p, hours){
-    // total pump hours always accrue while running
-    p.totalHours += hours;
+function logReset(p, itemLabel){
+  state.resetLog.unshift({
+    ts: Date.now(),
+    pumpId: p.id,
+    side: p.side,
+    itemLabel
+  });
+  if(state.resetLog.length > 50) state.resetLog.pop();
+}
 
-    // component hours accrue ONLY if active/checked
-    p.seats.forEach(x => { if (x.active) x.hours += hours; });
-    p.valves.forEach(x => { if (x.active) x.hours += hours; });
-    p.packings.forEach(x => { if (x.active) x.hours += hours; });
-  }
-
-  function startPump(index){
-    const p = pumps[index];
-    if (p.running) return;
-    p.running = true;
-    p.lastStart = Date.now();
-    log(p, "Started");
-    render();
-  }
-
-  function stopPump(index){
-    const p = pumps[index];
-    if (!p.running) return;
-
-    const now = Date.now();
-    const hours = (now - p.lastStart) / (1000 * 60 * 60);
-
-    addRunHours(p, hours);
-
-    p.running = false;
-    p.lastStart = null;
-    log(p, `Stopped (+${formatHours(hours)} hrs)`);
-    render();
-  }
-
-  function movePump(index){
-    const p = pumps[index];
-    const newOrientation = prompt(
-      "Move pump to (example): High Side / Low Side / Spare / Shop / Down",
-      p.orientation
-    );
-    if (!newOrientation) return;
-    p.orientation = newOrientation.trim();
-    log(p, `Moved to: ${p.orientation}`);
-    render();
-  }
-
-  function pulledPump(index){
-    const p = pumps[index];
-    if (p.running) stopPump(index);
-    log(p, "PULLED OUT (removed from service)");
-    p.orientation = "Pulled/Shop";
-    render();
-  }
-
-  function toggleActive(pumpIndex, group, itemIndex, checked){
-    const p = pumps[pumpIndex];
-    p[group][itemIndex].active = checked;
-    log(p, `${p[group][itemIndex].name} active = ${checked ? "ON" : "OFF"}`);
-    render();
-  }
-
-  function resetItem(pumpIndex, group, itemIndex){
-    const p = pumps[pumpIndex];
-    p[group][itemIndex].hours = 0;
-    log(p, `${p[group][itemIndex].name} reset (changed)`);
-    render();
-  }
-
-  function currentTotalHours(p){
-    if (!p.running) return p.totalHours;
-    return p.totalHours + (Date.now() - p.lastStart) / (1000 * 60 * 60);
-  }
-
-  function componentListHtml(pumpIndex, group){
-    const p = pumps[pumpIndex];
-    return p[group].map((it, idx) => `
-      <div class="item">
-        <div class="left">
-          <input type="checkbox"
-                 ${it.active ? "checked" : ""}
-                 onchange="toggleActive(${pumpIndex}, '${group}', ${idx}, this.checked)">
-          <div class="name">${it.name}:</div>
-          <div class="tiny">${formatHours(it.hours)} hrs</div>
-        </div>
-        <button onclick="resetItem(${pumpIndex}, '${group}', ${idx})">Reset</button>
-      </div>
-    `).join("");
-  }
-
-  function render(){
-    const grid = document.getElementById("pumpGrid");
-    grid.innerHTML = "";
-
-    pumps.forEach((p, i) => {
-      const card = document.createElement("div");
-      card.className = "pump-card" + (p.running ? " running" : "");
-
-      const totalNow = currentTotalHours(p);
-      const recentLogs = p.logs.slice(-7).reverse().map(l => `<div>${l}</div>`).join("");
-
-      card.innerHTML = `
-        <h3 style="margin:0 0 6px 0;">Pump ${p.id}</h3>
-        <div><strong>Status:</strong> ${p.running ? "Running" : "Stopped"}</div>
-        <div><strong>Orientation:</strong> ${p.orientation}</div>
-        <div><strong>Total Hours:</strong> ${formatHours(totalNow)}</div>
-
-        <div style="margin-top:10px;">
-          <button onclick="startPump(${i})">Start</button>
-          <button onclick="stopPump(${i})">Stop</button>
-          <button onclick="movePump(${i})">Move</button>
-          <button onclick="pulledPump(${i})">Pulled Out</button>
-        </div>
-
-        <div class="maint-wrap">
-          <div class="maint-title">Maintenance Tracking (only checked items accrue hours)</div>
-          <div class="maint-grid">
-            <div class="maint-box">
-              <div style="font-weight:bold; margin-bottom:6px;">Seats (5)</div>
-              ${componentListHtml(i, "seats")}
-            </div>
-            <div class="maint-box">
-              <div style="font-weight:bold; margin-bottom:6px;">Valves (5)</div>
-              ${componentListHtml(i, "valves")}
-            </div>
-            <div class="maint-box">
-              <div style="font-weight:bold; margin-bottom:6px;">Packings (5)</div>
-              ${componentListHtml(i, "packings")}
-            </div>
-          </div>
-          <div class="tiny" style="margin-top:8px;">
-            Tip: Uncheck a position if it’s not installed or you don’t want it counting hours.
-          </div>
-        </div>
-
-        <div class="log">
-          <div style="font-weight:bold; margin-bottom:6px;">Recent Log</div>
-          ${recentLogs || "<div class='tiny'>No logs yet.</div>"}
-        </div>
-      `;
-
-      grid.appendChild(card);
-    });
-  }
-
-  // Live update for total hours display
-  setInterval(render, 1000);
+/* ------------------ ACTIONS ------------------ */
+function startPump(i){
+  const p = state.pumps[i];
+  if(p.running) return;
+  p.running = true;
+  p.lastStart = Date.now();
+  save();
   render();
+}
+
+function stopPump(i){
+  const p = state.pumps[i];
+  if(!p.running) return;
+  const hours = (Date.now() - p.lastStart) / (1000*60*60);
+  addRunHours(p, hours);
+  p.running = false;
+  p.lastStart = null;
+  save();
+  render();
+}
+
+function moveSide(i, targetSide){
+  const p = state.pumps[i];
+  p.side = targetSide;
+  save();
+  render();
+}
+
+function toggleActive(i, group, idx, checked){
+  const p = state.pumps[i];
+  p[group][idx].active = checked;
+  save();
+  renderBoards(); // boards can change
+}
+
+function resetItem(i, group, idx){
+  const p = state.pumps[i];
+  const it = p[group][idx];
+  it.hours = 0;
+  logReset(p, `${it.name} (${group})`);
+  save();
+  render(); // refresh everything
+}
+
+function pulledOut(i){
+  const p = state.pumps[i];
+  if(p.running) stopPump(i);
+  // mark as "High" or "Low" stays, but you could add a third state later
+  save();
+  render();
+}
+
+/* ------------------ BULLETIN BOARDS ------------------ */
+function scanAlerts(){
+  const overdue = [];
+  const soon = [];
+
+  function checkItem(p, typeLabel, it, threshold){
+    if(!it.active) return;
+    const remaining = threshold - it.hours;
+    const base = {
+      pumpId: p.id,
+      side: p.side,
+      type: typeLabel,
+      name: it.name,
+      hours: it.hours,
+      threshold,
+      remaining
+    };
+    if(remaining <= 0){
+      overdue.push(base);
+    } else if(remaining <= WARN_WINDOW){
+      soon.push(base);
+    }
+  }
+
+  state.pumps.forEach(p => {
+    p.seats.forEach(it => checkItem(p, "Seat", it, THRESH.seat));
+    p.valves.forEach(it => checkItem(p, "Valve", it, THRESH.valve));
+    p.packings.forEach(it => checkItem(p, "Packing", it, THRESH.packing));
+  });
+
+  // Sort: most overdue first, then due soon smallest remaining first
+  overdue.sort((a,b) => a.remaining - b.remaining); // more negative first
+  soon.sort((a,b) => a.remaining - b.remaining);
+
+  return { overdue, soon };
+}
+
+function renderBoards(){
+  const { overdue, soon } = scanAlerts();
+
+  const overdueEl = document.getElementById("overdueList");
+  const soonEl = document.getElementById("soonList");
+  const resetEl = document.getElementById("resetList");
+
+  overdueEl.innerHTML = overdue.length
+    ? overdue.slice(0, 10).map(x => `
+      <div class="chip">
+        <span class="tag overdue">OVERDUE</span>
+        <strong>P${x.pumpId}</strong> <span class="muted">(${x.side})</span> — ${x.type} ${x.name}<br>
+        ${fmt(x.hours)}h / ${x.threshold}h <span class="muted">(over by ${fmt(-x.remaining)}h)</span>
+      </div>
+    `).join("")
+    : `<div class="tiny">Nothing overdue 🎉</div>`;
+
+  soonEl.innerHTML = soon.length
+    ? soon.slice(0, 10).map(x => `
+      <div class="chip">
+        <span class="tag soon">DUE SOON</span>
+        <strong>P${x.pumpId}</strong> <span class="muted">(${x.side})</span> — ${x.type} ${x.name}<br>
+        ${fmt(x.hours)}h / ${x.threshold}h <span class="muted">(${fmt(x.remaining)}h remaining)</span>
+      </div>
+    `).join("")
+    : `<div class="tiny">Nothing due soon.</div>`;
+
+  const resets = state.resetLog.slice(0, 10);
+  resetEl.innerHTML = resets.length
+    ? resets.map(r => `
+      <div class="chip">
+        <span class="tag reset">RESET</span>
+        <strong>P${r.pumpId}</strong> <span class="muted">(${r.side})</span> — ${r.itemLabel}<br>
+        <span class="muted">${new Date(r.ts).toLocaleString()}</span>
+      </div>
+    `).join("")
+    : `<div class="tiny">No resets yet.</div>`;
+}
+
+/* ------------------ RENDER PUMPS ------------------ */
+function componentBox(i, group, title){
+  const p = state.pumps[i];
+  const list = p[group].map((it, idx) => `
+    <div class="item">
+      <div class="left">
+        <input type="checkbox" ${it.active ? "checked" : ""} onchange="toggleActive(${i}, '${group}', ${idx}, this.checked)">
+        <div class="name">${it.name}</div>
+        <div class="tiny">${fmt(it.hours)}h</div>
+      </div>
+      <button onclick="resetItem(${i}, '${group}', ${idx})">Reset</button>
+    </div>
+  `).join("");
+
+  return `
+    <div class="box">
+      <div class="box-title">${title}</div>
+      ${list}
+    </div>
+  `;
+}
+
+function pumpCard(i){
+  const p = state.pumps[i];
+  const totalNow = currentTotal(p);
+
+  return `
+    <div class="pump-card ${p.running ? "running" : ""}">
+      <div class="row">
+        <strong>Pump ${p.id}</strong>
+        <span class="tiny">Side: ${p.side}</span>
+      </div>
+      <div>Status: ${p.running ? "Running" : "Stopped"}</div>
+      <div>Total Hours: <strong>${fmt(totalNow)}</strong></div>
+
+      <div class="row">
+        <button onclick="startPump(${i})">Start</button>
+        <button onclick="stopPump(${i})">Stop</button>
+        <button onclick="pulledOut(${i})">Pulled Out</button>
+      </div>
+
+      <div class="row">
+        <button onclick="moveSide(${i}, 'Low')">Move → Low</button>
+        <button onclick="moveSide(${i}, 'High')">Move → High</button>
+      </div>
+
+      <div class="maint">
+        <div class="tiny">Maintenance (only checked items accrue hours)</div>
+        <div class="maint-grid">
+          ${componentBox(i, "seats", "Seats (5)")}
+          ${componentBox(i, "valves", "Valves (5)")}
+          ${componentBox(i, "packings", "Packings (5)")}
+        </div>
+        <div class="tiny" style="margin-top:6px;">
+          Thresholds: Seat ${THRESH.seat}h • Valve ${THRESH.valve}h • Packing ${THRESH.packing}h • Warning window ${WARN_WINDOW}h
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+function renderPumps(){
+  const low = document.getElementById("lowSide");
+  const high = document.getElementById("highSide");
+  low.innerHTML = "";
+  high.innerHTML = "";
+
+  state.pumps.forEach((p, i) => {
+    const wrapper = document.createElement("div");
+    wrapper.innerHTML = pumpCard(i);
+    const cardEl = wrapper.firstElementChild;
+
+    if(p.side === "Low") low.appendChild(cardEl);
+    else high.appendChild(cardEl);
+  });
+}
+
+function render(){
+  renderPumps();
+  renderBoards();
+}
+
+/* ------------------ INIT ------------------ */
+load();
+render();
+setInterval(() => {
+  // Keep live totals updating while running without spamming saves
+  renderPumps();
+}, 1000);
 </script>
 
 </body>
 </html>
-
