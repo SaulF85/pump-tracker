@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Frac Pump Tracker</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background: #111;
+            color: white;
+            padding: 20px;
+        }
+
+        h1 {
+            text-align: center;
+        }
+
+        .pump-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 20px;
+        }
+
+        .pump-card {
+            background: #1e1e1e;
+            padding: 15px;
+            border-radius: 10px;
+            border: 1px solid #333;
+        }
+
+        .running {
+            border: 2px solid lime;
+        }
+
+        button {
+            margin: 5px 0;
+            padding: 6px 10px;
+            cursor: pointer;
+        }
+
+        select {
+            margin-top: 5px;
+        }
+
+        .maintenance {
+            margin-top: 10px;
+            background: #222;
+            padding: 8px;
+            border-radius: 6px;
+        }
+
+        .log {
+            margin-top: 8px;
+            font-size: 12px;
+            max-height: 80px;
+            overflow-y: auto;
+        }
+    </style>
+</head>
+<body>
+
+<h1>Frac Pump Tracker</h1>
+
+<div class="pump-grid" id="pumpGrid"></div>
+
+<script>
+const pumpCount = 9;
+const pumps = [];
+
+function createPump(id) {
+    return {
+        id: id,
+        totalHours: 0,
+        running: false,
+        orientation: "High Side",
+        lastStart: null,
+        seatValveHours: 0,
+        logs: []
+    };
+}
+
+function formatHours(hours) {
+    return hours.toFixed(2);
+}
+
+function startPump(index) {
+    const pump = pumps[index];
+    if (!pump.running) {
+        pump.running = true;
+        pump.lastStart = Date.now();
+        pump.logs.push("Started at " + new Date().toLocaleTimeString());
+        render();
+    }
+}
+
+function stopPump(index) {
+    const pump = pumps[index];
+    if (pump.running) {
+        const now = Date.now();
+        const hours = (now - pump.lastStart) / (1000 * 60 * 60);
+        pump.totalHours += hours;
+        pump.seatValveHours += hours;
+        pump.running = false;
+        pump.logs.push("Stopped at " + new Date().toLocaleTimeString());
+        render();
+    }
+}
+
+function movePump(index) {
+    const pump = pumps[index];
+    const newOrientation = prompt("Move pump to: High Side / Low Side / Spare / Shop / Down", pump.orientation);
+    if (newOrientation) {
+        pump.logs.push("Moved to " + newOrientation + " at " + new Date().toLocaleTimeString());
+        pump.orientation = newOrientation;
+        render();
+    }
+}
+
+function resetMaintenance(index) {
+    pumps[index].seatValveHours = 0;
+    pumps[index].logs.push("Seat & Valve reset at " + new Date().toLocaleTimeString());
+    render();
+}
+
+function render() {
+    const grid = document.getElementById("pumpGrid");
+    grid.innerHTML = "";
+
+    pumps.forEach((pump, index) => {
+        let currentHours = pump.totalHours;
+        if (pump.running) {
+            currentHours += (Date.now() - pump.lastStart) / (1000 * 60 * 60);
+        }
+
+        const card = document.createElement("div");
+        card.className = "pump-card" + (pump.running ? " running" : "");
+
+        card.innerHTML = `
+            <h3>Pump ${pump.id}</h3>
+            <p><strong>Status:</strong> ${pump.running ? "Running" : "Stopped"}</p>
+            <p><strong>Orientation:</strong> ${pump.orientation}</p>
+            <p><strong>Total Hours:</strong> ${formatHours(currentHours)}</p>
+            <div class="maintenance">
+                <p><strong>Seat/Valve Hours:</strong> ${formatHours(pump.seatValveHours)}</p>
+                <button onclick="resetMaintenance(${index})">Reset Seat/Valve</button>
+            </div>
+            <button onclick="startPump(${index})">Start</button>
+            <button onclick="stopPump(${index})">Stop</button>
+            <button onclick="movePump(${index})">Move</button>
+            <div class="log">
+                ${pump.logs.slice(-5).map(l => `<div>${l}</div>`).join("")}
+            </div>
+        `;
+
+        grid.appendChild(card);
+    });
+}
+
+// Initialize pumps
+for (let i = 1; i <= pumpCount; i++) {
+    pumps.push(createPump(i));
+}
+
+setInterval(render, 1000);
+render();
+</script>
+
+</body>
+</html>
