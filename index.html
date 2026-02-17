@@ -1,168 +1,315 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Frac Pump Tracker</title>
-    <style>
-        body {
-            font-family: Arial, sans-serif;
-            background: #111;
-            color: white;
-            padding: 20px;
-        }
+  <title>Frac Pump Tracker (24 Pumps)</title>
+  <meta charset="utf-8" />
+  <style>
+    body { font-family: Arial, sans-serif; background:#111; color:#fff; padding:20px; }
+    h1 { text-align:center; margin-bottom: 10px; }
+    .sub { text-align:center; color:#bbb; margin-bottom: 18px; }
 
-        h1 {
-            text-align: center;
-        }
+    .pump-grid{
+      display:grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap:16px;
+    }
 
-        .pump-grid {
-            display: grid;
-            grid-template-columns: repeat(3, 1fr);
-            gap: 20px;
-        }
+    .pump-card{
+      background:#1e1e1e;
+      border:1px solid #333;
+      border-radius:10px;
+      padding:14px;
+    }
 
-        .pump-card {
-            background: #1e1e1e;
-            padding: 15px;
-            border-radius: 10px;
-            border: 1px solid #333;
-        }
+    .running { border:2px solid lime; }
 
-        .running {
-            border: 2px solid lime;
-        }
+    button{
+      margin:6px 6px 0 0;
+      padding:6px 10px;
+      cursor:pointer;
+      border-radius:6px;
+      border:1px solid #444;
+      background:#222;
+      color:#fff;
+    }
+    button:hover{ background:#2a2a2a; }
 
-        button {
-            margin: 5px 0;
-            padding: 6px 10px;
-            cursor: pointer;
-        }
+    .tiny { font-size:12px; color:#bbb; }
 
-        select {
-            margin-top: 5px;
-        }
+    .log{
+      margin-top:10px;
+      font-size:12px;
+      max-height:110px;
+      overflow-y:auto;
+      background:#151515;
+      padding:8px;
+      border-radius:8px;
+      border:1px solid #2a2a2a;
+    }
 
-        .maintenance {
-            margin-top: 10px;
-            background: #222;
-            padding: 8px;
-            border-radius: 6px;
-        }
+    .maint-wrap{
+      margin-top:10px;
+      background:#171717;
+      border:1px solid #2a2a2a;
+      border-radius:10px;
+      padding:10px;
+    }
 
-        .log {
-            margin-top: 8px;
-            font-size: 12px;
-            max-height: 80px;
-            overflow-y: auto;
-        }
-    </style>
+    .maint-title{ font-weight:bold; margin-bottom:8px; }
+
+    .maint-grid{
+      display:grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap:10px;
+    }
+
+    .maint-box{
+      background:#141414;
+      border:1px solid #2a2a2a;
+      border-radius:8px;
+      padding:8px;
+    }
+
+    .item{
+      display:flex;
+      justify-content:space-between;
+      align-items:center;
+      gap:8px;
+      margin:6px 0;
+      padding-bottom:6px;
+      border-bottom:1px solid #222;
+    }
+    .item:last-child{ border-bottom:none; padding-bottom:0; }
+
+    .left{
+      display:flex;
+      align-items:center;
+      gap:8px;
+      min-width: 0;
+    }
+
+    .name{
+      white-space:nowrap;
+      overflow:hidden;
+      text-overflow:ellipsis;
+      max-width: 140px;
+    }
+
+    .item button{
+      margin:0;
+      padding:4px 8px;
+      font-size:12px;
+      white-space:nowrap;
+    }
+
+    input[type="checkbox"]{
+      transform: scale(1.1);
+      cursor:pointer;
+    }
+
+    @media (max-width: 1200px){
+      .pump-grid{ grid-template-columns: repeat(2, 1fr); }
+      .maint-grid{ grid-template-columns: repeat(2, 1fr); }
+    }
+    @media (max-width: 700px){
+      .pump-grid{ grid-template-columns: 1fr; }
+      .maint-grid{ grid-template-columns: 1fr; }
+      .name{ max-width: 220px; }
+    }
+  </style>
 </head>
 <body>
 
 <h1>Frac Pump Tracker</h1>
+<div class="sub">24 pumps • runtime-based hours • Seats/Valves/Packings tracked individually (5 each)</div>
 
 <div class="pump-grid" id="pumpGrid"></div>
 
 <script>
-const pumpCount = 9;
-const pumps = [];
+  const pumpCount = 24;
 
-function createPump(id) {
+  function createItems(label, count){
+    return Array.from({length: count}, (_, i) => ({
+      name: `${label} ${i+1}`,
+      hours: 0,
+      active: true // default active; uncheck if not installed / not being tracked
+    }));
+  }
+
+  function createPump(id){
     return {
-        id: id,
-        totalHours: 0,
-        running: false,
-        orientation: "High Side",
-        lastStart: null,
-        seatValveHours: 0,
-        logs: []
+      id,
+      totalHours: 0,
+      running: false,
+      orientation: "High Side",
+      lastStart: null,
+
+      seats: createItems("Seat", 5),
+      valves: createItems("Valve", 5),
+      packings: createItems("Packing", 5),
+
+      logs: []
     };
-}
+  }
 
-function formatHours(hours) {
-    return hours.toFixed(2);
-}
+  const pumps = Array.from({length: pumpCount}, (_, i) => createPump(i+1));
 
-function startPump(index) {
-    const pump = pumps[index];
-    if (!pump.running) {
-        pump.running = true;
-        pump.lastStart = Date.now();
-        pump.logs.push("Started at " + new Date().toLocaleTimeString());
-        render();
-    }
-}
+  function formatHours(h){ return (Math.round(h * 100) / 100).toFixed(2); }
 
-function stopPump(index) {
-    const pump = pumps[index];
-    if (pump.running) {
-        const now = Date.now();
-        const hours = (now - pump.lastStart) / (1000 * 60 * 60);
-        pump.totalHours += hours;
-        pump.seatValveHours += hours;
-        pump.running = false;
-        pump.logs.push("Stopped at " + new Date().toLocaleTimeString());
-        render();
-    }
-}
+  function log(p, msg){
+    p.logs.push(`${new Date().toLocaleString()} — ${msg}`);
+    if (p.logs.length > 80) p.logs.shift();
+  }
 
-function movePump(index) {
-    const pump = pumps[index];
-    const newOrientation = prompt("Move pump to: High Side / Low Side / Spare / Shop / Down", pump.orientation);
-    if (newOrientation) {
-        pump.logs.push("Moved to " + newOrientation + " at " + new Date().toLocaleTimeString());
-        pump.orientation = newOrientation;
-        render();
-    }
-}
+  function addRunHours(p, hours){
+    // total pump hours always accrue while running
+    p.totalHours += hours;
 
-function resetMaintenance(index) {
-    pumps[index].seatValveHours = 0;
-    pumps[index].logs.push("Seat & Valve reset at " + new Date().toLocaleTimeString());
+    // component hours accrue ONLY if active/checked
+    p.seats.forEach(x => { if (x.active) x.hours += hours; });
+    p.valves.forEach(x => { if (x.active) x.hours += hours; });
+    p.packings.forEach(x => { if (x.active) x.hours += hours; });
+  }
+
+  function startPump(index){
+    const p = pumps[index];
+    if (p.running) return;
+    p.running = true;
+    p.lastStart = Date.now();
+    log(p, "Started");
     render();
-}
+  }
 
-function render() {
+  function stopPump(index){
+    const p = pumps[index];
+    if (!p.running) return;
+
+    const now = Date.now();
+    const hours = (now - p.lastStart) / (1000 * 60 * 60);
+
+    addRunHours(p, hours);
+
+    p.running = false;
+    p.lastStart = null;
+    log(p, `Stopped (+${formatHours(hours)} hrs)`);
+    render();
+  }
+
+  function movePump(index){
+    const p = pumps[index];
+    const newOrientation = prompt(
+      "Move pump to (example): High Side / Low Side / Spare / Shop / Down",
+      p.orientation
+    );
+    if (!newOrientation) return;
+    p.orientation = newOrientation.trim();
+    log(p, `Moved to: ${p.orientation}`);
+    render();
+  }
+
+  function pulledPump(index){
+    const p = pumps[index];
+    if (p.running) stopPump(index);
+    log(p, "PULLED OUT (removed from service)");
+    p.orientation = "Pulled/Shop";
+    render();
+  }
+
+  function toggleActive(pumpIndex, group, itemIndex, checked){
+    const p = pumps[pumpIndex];
+    p[group][itemIndex].active = checked;
+    log(p, `${p[group][itemIndex].name} active = ${checked ? "ON" : "OFF"}`);
+    render();
+  }
+
+  function resetItem(pumpIndex, group, itemIndex){
+    const p = pumps[pumpIndex];
+    p[group][itemIndex].hours = 0;
+    log(p, `${p[group][itemIndex].name} reset (changed)`);
+    render();
+  }
+
+  function currentTotalHours(p){
+    if (!p.running) return p.totalHours;
+    return p.totalHours + (Date.now() - p.lastStart) / (1000 * 60 * 60);
+  }
+
+  function componentListHtml(pumpIndex, group){
+    const p = pumps[pumpIndex];
+    return p[group].map((it, idx) => `
+      <div class="item">
+        <div class="left">
+          <input type="checkbox"
+                 ${it.active ? "checked" : ""}
+                 onchange="toggleActive(${pumpIndex}, '${group}', ${idx}, this.checked)">
+          <div class="name">${it.name}:</div>
+          <div class="tiny">${formatHours(it.hours)} hrs</div>
+        </div>
+        <button onclick="resetItem(${pumpIndex}, '${group}', ${idx})">Reset</button>
+      </div>
+    `).join("");
+  }
+
+  function render(){
     const grid = document.getElementById("pumpGrid");
     grid.innerHTML = "";
 
-    pumps.forEach((pump, index) => {
-        let currentHours = pump.totalHours;
-        if (pump.running) {
-            currentHours += (Date.now() - pump.lastStart) / (1000 * 60 * 60);
-        }
+    pumps.forEach((p, i) => {
+      const card = document.createElement("div");
+      card.className = "pump-card" + (p.running ? " running" : "");
 
-        const card = document.createElement("div");
-        card.className = "pump-card" + (pump.running ? " running" : "");
+      const totalNow = currentTotalHours(p);
+      const recentLogs = p.logs.slice(-7).reverse().map(l => `<div>${l}</div>`).join("");
 
-        card.innerHTML = `
-            <h3>Pump ${pump.id}</h3>
-            <p><strong>Status:</strong> ${pump.running ? "Running" : "Stopped"}</p>
-            <p><strong>Orientation:</strong> ${pump.orientation}</p>
-            <p><strong>Total Hours:</strong> ${formatHours(currentHours)}</p>
-            <div class="maintenance">
-                <p><strong>Seat/Valve Hours:</strong> ${formatHours(pump.seatValveHours)}</p>
-                <button onclick="resetMaintenance(${index})">Reset Seat/Valve</button>
+      card.innerHTML = `
+        <h3 style="margin:0 0 6px 0;">Pump ${p.id}</h3>
+        <div><strong>Status:</strong> ${p.running ? "Running" : "Stopped"}</div>
+        <div><strong>Orientation:</strong> ${p.orientation}</div>
+        <div><strong>Total Hours:</strong> ${formatHours(totalNow)}</div>
+
+        <div style="margin-top:10px;">
+          <button onclick="startPump(${i})">Start</button>
+          <button onclick="stopPump(${i})">Stop</button>
+          <button onclick="movePump(${i})">Move</button>
+          <button onclick="pulledPump(${i})">Pulled Out</button>
+        </div>
+
+        <div class="maint-wrap">
+          <div class="maint-title">Maintenance Tracking (only checked items accrue hours)</div>
+          <div class="maint-grid">
+            <div class="maint-box">
+              <div style="font-weight:bold; margin-bottom:6px;">Seats (5)</div>
+              ${componentListHtml(i, "seats")}
             </div>
-            <button onclick="startPump(${index})">Start</button>
-            <button onclick="stopPump(${index})">Stop</button>
-            <button onclick="movePump(${index})">Move</button>
-            <div class="log">
-                ${pump.logs.slice(-5).map(l => `<div>${l}</div>`).join("")}
+            <div class="maint-box">
+              <div style="font-weight:bold; margin-bottom:6px;">Valves (5)</div>
+              ${componentListHtml(i, "valves")}
             </div>
-        `;
+            <div class="maint-box">
+              <div style="font-weight:bold; margin-bottom:6px;">Packings (5)</div>
+              ${componentListHtml(i, "packings")}
+            </div>
+          </div>
+          <div class="tiny" style="margin-top:8px;">
+            Tip: Uncheck a position if it’s not installed or you don’t want it counting hours.
+          </div>
+        </div>
 
-        grid.appendChild(card);
+        <div class="log">
+          <div style="font-weight:bold; margin-bottom:6px;">Recent Log</div>
+          ${recentLogs || "<div class='tiny'>No logs yet.</div>"}
+        </div>
+      `;
+
+      grid.appendChild(card);
     });
-}
+  }
 
-// Initialize pumps
-for (let i = 1; i <= pumpCount; i++) {
-    pumps.push(createPump(i));
-}
-
-setInterval(render, 1000);
-render();
+  // Live update for total hours display
+  setInterval(render, 1000);
+  render();
 </script>
 
 </body>
 </html>
+
