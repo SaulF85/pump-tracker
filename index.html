@@ -79,7 +79,6 @@
     }
     .station-key{ font-size:11px; color:#888; }
 
-    /* Station name input is now inside the drag/drop area (per your request) */
     .station-name-input{
       width:100%;
       padding:6px 8px;
@@ -101,12 +100,9 @@
       user-select:none;
     }
     .pump-card.running{ border:2px solid lime; }
-
-    /* Status colors */
     .pump-card.offline{ border:2px solid #ffcc00; }
     .pump-card.pulled{ border:2px solid #ff4d4d; }
 
-    /* Warning colors (maintenance) */
     .pump-card.warnsoon{ box-shadow: 0 0 0 2px rgba(255, 204, 0, 0.6) inset; }
     .pump-card.warnover{ box-shadow: 0 0 0 2px rgba(255, 77, 77, 0.7) inset; }
 
@@ -199,11 +195,11 @@
 
 <script>
 /* ------------------ SETTINGS ------------------ */
-const STORAGE_KEY = "frac_pump_tracker_stations_v2";
+const STORAGE_KEY = "frac_pump_tracker_stations_v2_fixedTyping";
 const pumpCount = 24;
 const stationsPerSide = 12;
 
-/* Warnings (integrated) */
+/* Warnings */
 const THRESH = { seat: 250, valve: 250, packing: 150 }; // hours
 const WARN_WINDOW = 20; // hours before threshold = "Due Soon"
 
@@ -387,7 +383,6 @@ function setStatus(pumpId, status){
   const p = findPump(pumpId);
   if(!p) return;
 
-  // If leaving running, capture hours
   if(p.running && status !== "Running") stopPumpById(p.id);
 
   const by = prompt(`Who is setting Pump ${p.id} to ${status}? (name/initials)`, p.statusBy || "") || "";
@@ -395,14 +390,11 @@ function setStatus(pumpId, status){
 
   if(status === "Offline" || status === "PulledOut"){
     comment = prompt(`Reason/comment for Pump ${p.id} (${status}):`, comment) || "";
-  } else if (status === "Stopped") {
-    // optional
-    comment = p.statusComment || "";
   }
 
   p.status = status;
   p.statusBy = by.trim();
-  p.statusComment = comment.trim();
+  p.statusComment = (comment || "").trim();
   p.statusAt = Date.now();
 
   if(status === "Running"){
@@ -422,7 +414,6 @@ function backOnline(pumpId){
   p.statusBy = by.trim();
   p.statusComment = "";
   p.statusAt = Date.now();
-  // do not auto-start; Start ALL handles that
   save(); render();
 }
 
@@ -431,6 +422,8 @@ function toggleActive(pumpId, group, idx, checked){
   const p = findPump(pumpId);
   p[group][idx].active = checked;
   save();
+  // no full re-render needed, but we keep it simple: refresh warnings display
+  render();
 }
 
 function resetItem(pumpId, group, idx){
@@ -443,7 +436,7 @@ function resetItem(pumpId, group, idx){
   it.hours = 0;
   it.lastChangedBy = by.trim();
   it.lastChangedAt = Date.now();
-  it.lastComment = comment.trim();
+  it.lastComment = (comment || "").trim();
 
   state.resetLog.unshift({
     ts: Date.now(),
@@ -478,18 +471,15 @@ function onDrop(ev, stationKey){
   const currentStation = findStationByKey(movingPump.stationKey);
   const targetPumpId = targetStation.pumpId;
 
-  // swap if occupied
   if(targetPumpId && targetPumpId !== movingPump.id){
     const targetPump = findPump(targetPumpId);
     targetPump.stationKey = currentStation.key;
     currentStation.pumpId = targetPump.id;
   }
 
-  // move
   movingPump.stationKey = targetStation.key;
   targetStation.pumpId = movingPump.id;
 
-  // if we swapped, targetStation already had a pump; otherwise clear original
   if(currentStation && currentStation.key !== targetStation.key){
     if(targetPumpId && targetPumpId !== movingPump.id){
       // swapped; currentStation already set
@@ -501,12 +491,13 @@ function onDrop(ev, stationKey){
   save(); render();
 }
 
-/* Station name edit (inside dropzone now) */
+/* Station name edit (inside dropzone) */
 function editStationName(stationKey, newName){
   const s = findStationByKey(stationKey);
   if(!s) return;
   s.name = newName;
   save();
+  // IMPORTANT: no render() here; otherwise typing will still get interrupted
 }
 
 /* ------------------ EXPORT CSV ------------------ */
@@ -571,7 +562,6 @@ function statusClass(p){
   if(p.status === "PulledOut") return "pulled";
   return "";
 }
-
 function warningClass(p){
   const w = classifyMaintenance(p);
   if(w.overdue > 0) return "warnover";
@@ -616,7 +606,7 @@ function renderPumpCard(p){
       <div><strong>Pump ${p.id}</strong> <span class="muted">• ${st?.name ?? p.stationKey}</span></div>
       <div>Status: <strong>${p.status}</strong> <span class="muted">${p.statusBy ? `• by ${p.statusBy}` : ""}</span></div>
       ${p.statusComment ? `<div class="tiny muted">Note: ${p.statusComment}</div>` : ""}
-      <div>Total Hours: <strong>${fmt(totalNow)}</strong></div>
+      <div>Total Hours: <strong id="totalHours-${p.id}">${fmt(totalNow)}</strong></div>
       <div class="tiny muted">Maintenance: Overdue ${w.overdue} • Due soon ${w.soon}</div>
 
       <div class="row">
@@ -656,10 +646,9 @@ function renderStation(station){
         ondragleave="onDragLeave(event)"
         ondrop="onDrop(event, '${station.key}')">
 
-        <!-- Name edit is INSIDE the drag/drop box -->
         <input class="station-name-input" value="${station.name}"
                oninput="editStationName('${station.key}', this.value)"
-               placeholder="Station name (e.g., Manifold A / Pump Position 3)">
+               placeholder="Station name (e.g., Manifold A / Position 3)">
 
         ${pump ? renderPumpCard(pump) : `<div class="tiny muted">Drop a pump card here</div>`}
       </div>
@@ -674,15 +663,22 @@ function render(){
   highEl.innerHTML = state.stations.high.map(renderStation).join("");
 }
 
+/* ✅ Live updater: updates only total-hours text so inputs don’t get rebuilt */
+function updateLiveTotalsOnly(){
+  state.pumps.forEach(p => {
+    if(!p.running) return;
+    const el = document.getElementById(`totalHours-${p.id}`);
+    if(el) el.textContent = fmt(currentTotal(p));
+  });
+}
+
 function reconcile(){
-  // station -> pump consistency
   allStations().forEach(st => {
     if(st.pumpId){
       const p = findPump(st.pumpId);
       if(p) p.stationKey = st.key;
     }
   });
-  // pumps pointing at missing station -> default
   state.pumps.forEach(p => {
     if(!findStationByKey(p.stationKey)){
       p.stationKey = (p.id <= 12) ? `L${p.id}` : `H${p.id-12}`;
@@ -704,7 +700,9 @@ function resetAllData(){
 load();
 reconcile();
 render();
-setInterval(render, 1000); // live totals update
+
+/* ✅ Only update totals every second (no full re-render) */
+setInterval(updateLiveTotalsOnly, 1000);
 </script>
 
 </body>
