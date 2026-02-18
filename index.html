@@ -1,105 +1,122 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <title>Frac Pump Tracker (High/Low + Boards)</title>
+  <title>Frac Pump Tracker (Stations + DragDrop + Export)</title>
   <meta charset="utf-8" />
   <style>
-    body { font-family: Arial, sans-serif; background:#111; color:#fff; padding:18px; }
-    h1 { text-align:center; margin: 6px 0 4px; }
-    .sub { text-align:center; color:#bbb; margin-bottom:14px; font-size:13px; }
+    body { font-family: Arial, sans-serif; background:#111; color:#fff; padding:16px; }
+    h1 { text-align:center; margin:6px 0 2px; }
+    .sub { text-align:center; color:#bbb; margin:0 0 12px; font-size:13px; }
 
-    .top{
-      display:grid;
-      grid-template-columns: 1fr 1fr 1fr;
-      gap:12px;
-      margin-bottom:14px;
+    .toolbar{
+      display:flex; gap:10px; flex-wrap:wrap;
+      justify-content:center;
+      margin-bottom:12px;
     }
-    .board{
-      background:#151515;
-      border:1px solid #333;
-      border-radius:10px;
-      padding:10px;
-      min-height:120px;
-    }
-    .board h3{ margin:0 0 8px 0; font-size:14px; }
-    .board .hint{ color:#aaa; font-size:12px; margin-bottom:8px; }
-    .chip{
-      background:#1e1e1e;
-      border:1px solid #2d2d2d;
-      border-radius:10px;
-      padding:8px;
-      margin:8px 0;
-      font-size:12px;
-      line-height: 1.25;
-    }
-    .chip .tag{
-      display:inline-block;
-      font-size:11px;
-      padding:2px 6px;
-      border-radius:999px;
+    button{
+      padding:7px 10px;
+      cursor:pointer;
+      border-radius:8px;
       border:1px solid #444;
-      margin-right:6px;
-      color:#ddd;
+      background:#222; color:#fff;
+      font-size:12px;
     }
-    .chip .tag.overdue{ border-color:#ff4d4d; }
-    .chip .tag.soon{ border-color:#ffcc00; }
-    .chip .tag.reset{ border-color:#66d9ff; }
-    .chip .muted{ color:#aaa; }
+    button:hover{ background:#2a2a2a; }
 
     .layout{
       display:grid;
       grid-template-columns: 1fr 1fr;
       gap:14px;
     }
-    .column{
+    .side{
       background:#151515;
       border:1px solid #333;
-      border-radius:10px;
+      border-radius:12px;
       padding:10px;
     }
-    .col-title{
+    .side.low{ border:2px solid #0077ff; }
+    .side.high{ border:2px solid #ff9900; }
+
+    .side-title{
       text-align:center;
       font-weight:bold;
       font-size:18px;
       margin:4px 0 10px;
     }
-    .low { border:2px solid #0077ff; }
-    .high { border:2px solid #ff9900; }
 
-    .pump-grid{
+    .stations{
       display:grid;
       grid-template-columns: repeat(2, 1fr);
       gap:10px;
     }
+
+    .station{
+      background:#1a1a1a;
+      border:1px solid #2a2a2a;
+      border-radius:12px;
+      padding:10px;
+      min-height:140px;
+    }
+
+    .station-header{
+      display:flex;
+      justify-content:space-between;
+      align-items:center;
+      gap:8px;
+      margin-bottom:8px;
+    }
+
+    .station-name{
+      font-weight:bold;
+      font-size:13px;
+      white-space:nowrap;
+      overflow:hidden;
+      text-overflow:ellipsis;
+      max-width: 70%;
+    }
+
+    .station-name input{
+      width: 100%;
+      padding:4px 6px;
+      border-radius:8px;
+      border:1px solid #333;
+      background:#121212;
+      color:#fff;
+      font-size:12px;
+    }
+
+    .dropzone{
+      border:1px dashed #444;
+      border-radius:10px;
+      padding:8px;
+      min-height:88px;
+      background:#141414;
+    }
+    .dropzone.dragover{
+      border-color:#66ff66;
+      background:#101810;
+    }
+
     .pump-card{
       background:#1e1e1e;
       border:1px solid #333;
-      border-radius:10px;
+      border-radius:12px;
       padding:10px;
       font-size:12px;
+      user-select:none;
     }
-    .running{ border:2px solid lime; }
-
-    button{
-      margin:6px 6px 0 0;
-      padding:5px 8px;
-      font-size:12px;
-      cursor:pointer;
-      border-radius:7px;
-      border:1px solid #444;
-      background:#222;
-      color:#fff;
-    }
-    button:hover{ background:#2a2a2a; }
-    .tiny{ color:#aaa; font-size:11px; }
-    .row{ display:flex; gap:10px; align-items:center; flex-wrap:wrap; }
-    .row strong{ font-size:13px; }
+    .pump-card.running{ border:2px solid lime; }
+    .pump-card.offline{ border:2px solid #ffcc00; }
+    .pump-card.pulled{ border:2px solid #ff4d4d; }
+    .muted{ color:#aaa; }
+    .row{ display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin-top:6px; }
+    .tiny{ font-size:11px; color:#aaa; }
 
     .maint{
       margin-top:10px;
       background:#141414;
       border:1px solid #2a2a2a;
-      border-radius:10px;
+      border-radius:12px;
       padding:8px;
     }
     .maint-grid{
@@ -111,10 +128,11 @@
     .box{
       background:#121212;
       border:1px solid #2a2a2a;
-      border-radius:8px;
+      border-radius:10px;
       padding:8px;
     }
     .box-title{ font-weight:bold; margin-bottom:6px; font-size:12px; }
+
     .item{
       display:flex;
       justify-content:space-between;
@@ -124,12 +142,7 @@
       border-bottom:1px solid #222;
     }
     .item:last-child{ border-bottom:none; }
-    .left{
-      display:flex;
-      align-items:center;
-      gap:8px;
-      min-width:0;
-    }
+    .left{ display:flex; align-items:center; gap:8px; min-width:0; }
     .name{
       max-width:110px;
       white-space:nowrap;
@@ -140,16 +153,15 @@
     .item button{ margin:0; padding:4px 8px; font-size:11px; }
 
     .footer{
-      margin-top:12px;
+      margin-top:10px;
       text-align:center;
       color:#777;
       font-size:11px;
     }
 
     @media (max-width: 1100px){
-      .top{ grid-template-columns: 1fr; }
       .layout{ grid-template-columns: 1fr; }
-      .pump-grid{ grid-template-columns: 1fr; }
+      .stations{ grid-template-columns: 1fr; }
       .maint-grid{ grid-template-columns: 1fr; }
       .name{ max-width: 220px; }
     }
@@ -158,64 +170,46 @@
 <body>
 
 <h1>Frac Pump Tracker</h1>
-<div class="sub">VERSION: 24-PUMPS + BOARDS • Auto-saves in browser • Low Side (left) / High Side (right)</div>
+<div class="sub">24 pumps • Stations • Drag & Drop • Offline/Pulled comments • CSV export • Auto-saves</div>
 
-<div class="top">
-  <div class="board" id="boardOverdue">
-    <h3>Overdue</h3>
-    <div class="hint">Items past threshold (Seats/Valves/Packings)</div>
-    <div id="overdueList" class="tiny">Loading…</div>
-  </div>
-  <div class="board" id="boardSoon">
-    <h3>Due Soon</h3>
-    <div class="hint">Within “warning window” hours of threshold</div>
-    <div id="soonList" class="tiny">Loading…</div>
-  </div>
-  <div class="board" id="boardReset">
-    <h3>Recently Reset</h3>
-    <div class="hint">Last 10 maintenance resets</div>
-    <div id="resetList" class="tiny">Loading…</div>
-  </div>
+<div class="toolbar">
+  <button onclick="startAll()">Start ALL</button>
+  <button onclick="stopAll()">Stop ALL</button>
+  <button onclick="exportCSV()">Export CSV (Excel)</button>
+  <button onclick="resetAllDemo()">Reset Demo Data (optional)</button>
 </div>
 
 <div class="layout">
-  <div class="column low">
-    <div class="col-title">LOW SIDE</div>
-    <div class="pump-grid" id="lowSide"></div>
+  <div class="side low">
+    <div class="side-title">LOW SIDE</div>
+    <div class="stations" id="lowStations"></div>
   </div>
 
-  <div class="column high">
-    <div class="col-title">HIGH SIDE</div>
-    <div class="pump-grid" id="highSide"></div>
+  <div class="side high">
+    <div class="side-title">HIGH SIDE</div>
+    <div class="stations" id="highStations"></div>
   </div>
 </div>
 
 <div class="footer">
-  Tip: If GitHub Pages “won’t update”, hard refresh the live page (Ctrl+F5) or open in Incognito.
+  Tip: Drag a pump card to a different station to move it. “Offline” and “Pulled Out” will ask for a comment.
 </div>
 
 <script>
 /* ------------------ SETTINGS ------------------ */
-const STORAGE_KEY = "frac_pump_tracker_v3";
-
-// thresholds (hours)
-const THRESH = {
-  seat: 250,
-  valve: 250,
-  packing: 150
-};
-
-// warning window (hours before threshold)
-const WARN_WINDOW = 20;
-
+const STORAGE_KEY = "frac_pump_tracker_stations_v1";
 const pumpCount = 24;
+const stationsPerSide = 12; // 12 low + 12 high = 24 stations
 
 /* ------------------ DATA MODEL ------------------ */
 function createItems(label, count){
   return Array.from({length: count}, (_, i) => ({
     name: `${label} ${i+1}`,
     hours: 0,
-    active: true
+    active: true,
+    lastChangedBy: "",
+    lastChangedAt: null,
+    lastComment: ""
   }));
 }
 
@@ -225,64 +219,89 @@ function createPump(id){
     totalHours: 0,
     running: false,
     lastStart: null,
-    side: (id <= 12) ? "Low" : "High",
+    status: "Stopped", // Running / Stopped / Offline / PulledOut
+    statusComment: "",
+    statusBy: "",
+    statusAt: null,
+    stationKey: (id <= 12) ? `L${id}` : `H${id-12}`,
     seats: createItems("Seat", 5),
     valves: createItems("Valve", 5),
     packings: createItems("Packing", 5)
   };
 }
 
+function createStations(){
+  const low = Array.from({length: stationsPerSide}, (_, i) => ({
+    key: `L${i+1}`,
+    side: "Low",
+    name: `Low Station ${i+1}`,
+    pumpId: (i+1) // default Pump 1-12
+  }));
+  const high = Array.from({length: stationsPerSide}, (_, i) => ({
+    key: `H${i+1}`,
+    side: "High",
+    name: `High Station ${i+1}`,
+    pumpId: (i+13) // default Pump 13-24
+  }));
+  return { low, high };
+}
+
 let state = {
   pumps: Array.from({length: pumpCount}, (_, i) => createPump(i+1)),
-  resetLog: [] // {ts, pumpId, side, itemLabel}
+  stations: createStations(),
+  resetLog: [] // {ts, pumpId, stationKey, itemLabel, by, comment}
 };
 
 /* ------------------ PERSISTENCE ------------------ */
 function save(){
-  try{
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
-  }catch(e){
-    console.warn("Save failed:", e);
-  }
+  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); }
+  catch(e){ console.warn("Save failed:", e); }
 }
 function load(){
   try{
     const raw = localStorage.getItem(STORAGE_KEY);
     if(!raw) return;
     const parsed = JSON.parse(raw);
+    if(!parsed || !Array.isArray(parsed.pumps) || !parsed.stations) return;
 
-    // Basic shape validation + repair
-    if(parsed && Array.isArray(parsed.pumps) && parsed.pumps.length === pumpCount){
-      state = parsed;
+    state = parsed;
 
-      // if any pump missing fields, patch
+    // Patch any missing fields safely
+    if(!state.resetLog) state.resetLog = [];
+    if(!state.stations.low || !state.stations.high) state.stations = createStations();
+
+    // Ensure pumps exist
+    if(!Array.isArray(state.pumps) || state.pumps.length !== pumpCount){
+      state.pumps = Array.from({length: pumpCount}, (_, i) => createPump(i+1));
+    } else {
       state.pumps.forEach((p, idx) => {
         p.id ??= (idx+1);
-        p.side ??= (p.id <= 12 ? "Low" : "High");
         p.totalHours ??= 0;
         p.running ??= false;
         p.lastStart ??= null;
+        p.status ??= (p.running ? "Running" : "Stopped");
+        p.statusComment ??= "";
+        p.statusBy ??= "";
+        p.statusAt ??= null;
+        p.stationKey ??= ((p.id <= 12) ? `L${p.id}` : `H${p.id-12}`);
 
-        p.seats ??= createItems("Seat", 5);
-        p.valves ??= createItems("Valve", 5);
-        p.packings ??= createItems("Packing", 5);
-
-        // ensure each group has 5
+        // Ensure groups
         ["seats","valves","packings"].forEach(g=>{
+          const label = g==="seats"?"Seat":g==="valves"?"Valve":"Packing";
           if(!Array.isArray(p[g]) || p[g].length !== 5){
-            const label = g === "seats" ? "Seat" : g === "valves" ? "Valve" : "Packing";
             p[g] = createItems(label, 5);
           } else {
             p[g].forEach((it, i) => {
-              it.name ??= `${g.slice(0,-1)} ${i+1}`;
+              it.name ??= `${label} ${i+1}`;
               it.hours ??= 0;
-              it.active = (it.active !== false); // default true
+              it.active = (it.active !== false);
+              it.lastChangedBy ??= "";
+              it.lastChangedAt ??= null;
+              it.lastComment ??= "";
             });
           }
         });
       });
-
-      state.resetLog ??= [];
     }
   }catch(e){
     console.warn("Load failed:", e);
@@ -291,6 +310,14 @@ function load(){
 
 /* ------------------ HELPERS ------------------ */
 function fmt(h){ return (Math.round(h*100)/100).toFixed(2); }
+
+function findPump(pumpId){
+  return state.pumps.find(p => p.id === pumpId);
+}
+function findStationByKey(key){
+  const all = [...state.stations.low, ...state.stations.high];
+  return all.find(s => s.key === key);
+}
 
 function currentTotal(p){
   if(!p.running) return p.totalHours;
@@ -304,233 +331,363 @@ function addRunHours(p, hours){
   p.packings.forEach(x => { if(x.active) x.hours += hours; });
 }
 
-function logReset(p, itemLabel){
+function setStatus(p, status){
+  // If switching away from running, stop first to capture hours
+  if(p.running && status !== "Running"){
+    stopPumpById(p.id);
+  }
+
+  const by = prompt(`Who is setting Pump ${p.id} to ${status}? (name/initials)`, "") || "";
+  let comment = "";
+
+  if(status === "Offline" || status === "PulledOut"){
+    comment = prompt(`Reason/comment for Pump ${p.id} (${status}):`, p.statusComment || "") || "";
+  }
+
+  p.status = status;
+  p.statusBy = by.trim();
+  p.statusComment = comment.trim();
+  p.statusAt = Date.now();
+
+  if(status === "Running"){
+    // start it (unless pulled/offline)
+    startPumpById(p.id);
+  } else if(status === "Stopped"){
+    // ensure stopped
+    if(p.running) stopPumpById(p.id);
+  }
+
+  save();
+  render();
+}
+
+/* ------------------ ACTIONS: START/STOP ------------------ */
+function startPumpById(pumpId){
+  const p = findPump(pumpId);
+  if(!p) return;
+  if(p.status === "Offline" || p.status === "PulledOut") return;
+  if(p.running) return;
+
+  p.running = true;
+  p.lastStart = Date.now();
+  p.status = "Running";
+}
+function stopPumpById(pumpId){
+  const p = findPump(pumpId);
+  if(!p) return;
+  if(!p.running) {
+    if(p.status === "Running") p.status = "Stopped";
+    return;
+  }
+
+  const hours = (Date.now() - p.lastStart) / (1000*60*60);
+  addRunHours(p, hours);
+
+  p.running = false;
+  p.lastStart = null;
+  if(p.status === "Running") p.status = "Stopped";
+}
+
+function startAll(){
+  state.pumps.forEach(p => {
+    if(p.status !== "Offline" && p.status !== "PulledOut"){
+      startPumpById(p.id);
+    }
+  });
+  save();
+  render();
+}
+function stopAll(){
+  state.pumps.forEach(p => stopPumpById(p.id));
+  save();
+  render();
+}
+
+/* ------------------ MAINTENANCE ------------------ */
+function toggleActive(pumpId, group, idx, checked){
+  const p = findPump(pumpId);
+  p[group][idx].active = checked;
+  save();
+}
+
+function resetItem(pumpId, group, idx){
+  const p = findPump(pumpId);
+  const it = p[group][idx];
+
+  const by = prompt(`Who changed ${it.name} on Pump ${p.id}? (name/initials)`, "") || "";
+  const comment = prompt(`Optional comment (part #, reason, etc.) for ${it.name}:`, it.lastComment || "") || "";
+
+  it.hours = 0;
+  it.lastChangedBy = by.trim();
+  it.lastChangedAt = Date.now();
+  it.lastComment = comment.trim();
+
   state.resetLog.unshift({
     ts: Date.now(),
     pumpId: p.id,
-    side: p.side,
-    itemLabel
+    stationKey: p.stationKey,
+    itemLabel: `${group.toUpperCase()} - ${it.name}`,
+    by: it.lastChangedBy,
+    comment: it.lastComment
   });
-  if(state.resetLog.length > 50) state.resetLog.pop();
-}
+  if(state.resetLog.length > 200) state.resetLog.pop();
 
-/* ------------------ ACTIONS ------------------ */
-function startPump(i){
-  const p = state.pumps[i];
-  if(p.running) return;
-  p.running = true;
-  p.lastStart = Date.now();
   save();
   render();
 }
 
-function stopPump(i){
-  const p = state.pumps[i];
-  if(!p.running) return;
-  const hours = (Date.now() - p.lastStart) / (1000*60*60);
-  addRunHours(p, hours);
-  p.running = false;
-  p.lastStart = null;
-  save();
-  render();
+/* ------------------ STATIONS / DRAG & DROP ------------------ */
+let dragPumpId = null;
+
+function onDragStart(pumpId){
+  dragPumpId = pumpId;
 }
-
-function moveSide(i, targetSide){
-  const p = state.pumps[i];
-  p.side = targetSide;
-  save();
-  render();
+function onDragEnd(){
+  dragPumpId = null;
 }
-
-function toggleActive(i, group, idx, checked){
-  const p = state.pumps[i];
-  p[group][idx].active = checked;
-  save();
-  renderBoards(); // boards can change
+function onDragOver(ev){
+  ev.preventDefault();
+  ev.currentTarget.classList.add("dragover");
 }
-
-function resetItem(i, group, idx){
-  const p = state.pumps[i];
-  const it = p[group][idx];
-  it.hours = 0;
-  logReset(p, `${it.name} (${group})`);
-  save();
-  render(); // refresh everything
+function onDragLeave(ev){
+  ev.currentTarget.classList.remove("dragover");
 }
+function onDrop(ev, stationKey){
+  ev.preventDefault();
+  ev.currentTarget.classList.remove("dragover");
 
-function pulledOut(i){
-  const p = state.pumps[i];
-  if(p.running) stopPump(i);
-  // mark as "High" or "Low" stays, but you could add a third state later
-  save();
-  render();
-}
+  if(!dragPumpId) return;
+  const movingPump = findPump(dragPumpId);
+  const targetStation = findStationByKey(stationKey);
+  if(!movingPump || !targetStation) return;
 
-/* ------------------ BULLETIN BOARDS ------------------ */
-function scanAlerts(){
-  const overdue = [];
-  const soon = [];
+  // Find current station of the moving pump
+  const currentStation = findStationByKey(movingPump.stationKey);
 
-  function checkItem(p, typeLabel, it, threshold){
-    if(!it.active) return;
-    const remaining = threshold - it.hours;
-    const base = {
-      pumpId: p.id,
-      side: p.side,
-      type: typeLabel,
-      name: it.name,
-      hours: it.hours,
-      threshold,
-      remaining
-    };
-    if(remaining <= 0){
-      overdue.push(base);
-    } else if(remaining <= WARN_WINDOW){
-      soon.push(base);
-    }
+  // If target station has a pump, swap them
+  const targetPumpId = targetStation.pumpId;
+  if(targetPumpId && targetPumpId !== movingPump.id){
+    const targetPump = findPump(targetPumpId);
+    // Swap station assignments
+    targetPump.stationKey = currentStation.key;
+    currentStation.pumpId = targetPump.id;
   }
 
+  // Move pump to target
+  if(currentStation) currentStation.pumpId = targetPumpId && targetPumpId !== movingPump.id ? targetPumpId : null;
+  movingPump.stationKey = targetStation.key;
+  targetStation.pumpId = movingPump.id;
+
+  save();
+  render();
+}
+
+/* ------------------ STATION NAME EDIT ------------------ */
+function editStationName(stationKey, newName){
+  const s = findStationByKey(stationKey);
+  if(!s) return;
+  s.name = newName;
+  save();
+}
+
+/* ------------------ EXPORT (CSV for Excel) ------------------ */
+function csvEscape(val){
+  const s = String(val ?? "");
+  if(/[",\n]/.test(s)) return `"${s.replace(/"/g, '""')}"`;
+  return s;
+}
+
+function exportCSV(){
+  // Rows: Pump + status + station + totals + component hours + last change metadata
+  const rows = [];
+
+  const header = [
+    "PumpID","StationKey","StationName","Side",
+    "Status","StatusBy","StatusAt","StatusComment",
+    "TotalPumpHours",
+    "Seat1Hours","Seat2Hours","Seat3Hours","Seat4Hours","Seat5Hours",
+    "Valve1Hours","Valve2Hours","Valve3Hours","Valve4Hours","Valve5Hours",
+    "Packing1Hours","Packing2Hours","Packing3Hours","Packing4Hours","Packing5Hours"
+  ];
+  rows.push(header);
+
   state.pumps.forEach(p => {
-    p.seats.forEach(it => checkItem(p, "Seat", it, THRESH.seat));
-    p.valves.forEach(it => checkItem(p, "Valve", it, THRESH.valve));
-    p.packings.forEach(it => checkItem(p, "Packing", it, THRESH.packing));
+    const st = findStationByKey(p.stationKey);
+    const side = st?.side ?? "";
+    const stName = st?.name ?? "";
+
+    const row = [
+      p.id,
+      p.stationKey,
+      stName,
+      side,
+      p.status,
+      p.statusBy || "",
+      p.statusAt ? new Date(p.statusAt).toLocaleString() : "",
+      p.statusComment || "",
+      fmt(currentTotal(p))
+    ];
+
+    p.seats.forEach(it => row.push(fmt(it.hours)));
+    p.valves.forEach(it => row.push(fmt(it.hours)));
+    p.packings.forEach(it => row.push(fmt(it.hours)));
+
+    rows.push(row);
   });
 
-  // Sort: most overdue first, then due soon smallest remaining first
-  overdue.sort((a,b) => a.remaining - b.remaining); // more negative first
-  soon.sort((a,b) => a.remaining - b.remaining);
+  const csv = rows.map(r => r.map(csvEscape).join(",")).join("\n");
+  const blob = new Blob([csv], {type: "text/csv;charset=utf-8;"});
+  const url = URL.createObjectURL(blob);
 
-  return { overdue, soon };
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `pump-tracker-export-${new Date().toISOString().slice(0,10)}.csv`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+
+  URL.revokeObjectURL(url);
 }
 
-function renderBoards(){
-  const { overdue, soon } = scanAlerts();
-
-  const overdueEl = document.getElementById("overdueList");
-  const soonEl = document.getElementById("soonList");
-  const resetEl = document.getElementById("resetList");
-
-  overdueEl.innerHTML = overdue.length
-    ? overdue.slice(0, 10).map(x => `
-      <div class="chip">
-        <span class="tag overdue">OVERDUE</span>
-        <strong>P${x.pumpId}</strong> <span class="muted">(${x.side})</span> — ${x.type} ${x.name}<br>
-        ${fmt(x.hours)}h / ${x.threshold}h <span class="muted">(over by ${fmt(-x.remaining)}h)</span>
-      </div>
-    `).join("")
-    : `<div class="tiny">Nothing overdue 🎉</div>`;
-
-  soonEl.innerHTML = soon.length
-    ? soon.slice(0, 10).map(x => `
-      <div class="chip">
-        <span class="tag soon">DUE SOON</span>
-        <strong>P${x.pumpId}</strong> <span class="muted">(${x.side})</span> — ${x.type} ${x.name}<br>
-        ${fmt(x.hours)}h / ${x.threshold}h <span class="muted">(${fmt(x.remaining)}h remaining)</span>
-      </div>
-    `).join("")
-    : `<div class="tiny">Nothing due soon.</div>`;
-
-  const resets = state.resetLog.slice(0, 10);
-  resetEl.innerHTML = resets.length
-    ? resets.map(r => `
-      <div class="chip">
-        <span class="tag reset">RESET</span>
-        <strong>P${r.pumpId}</strong> <span class="muted">(${r.side})</span> — ${r.itemLabel}<br>
-        <span class="muted">${new Date(r.ts).toLocaleString()}</span>
-      </div>
-    `).join("")
-    : `<div class="tiny">No resets yet.</div>`;
+/* ------------------ RENDER ------------------ */
+function statusClass(p){
+  if(p.status === "Running") return "running";
+  if(p.status === "Offline") return "offline";
+  if(p.status === "PulledOut") return "pulled";
+  return "";
 }
 
-/* ------------------ RENDER PUMPS ------------------ */
-function componentBox(i, group, title){
-  const p = state.pumps[i];
-  const list = p[group].map((it, idx) => `
-    <div class="item">
-      <div class="left">
-        <input type="checkbox" ${it.active ? "checked" : ""} onchange="toggleActive(${i}, '${group}', ${idx}, this.checked)">
-        <div class="name">${it.name}</div>
-        <div class="tiny">${fmt(it.hours)}h</div>
+function renderComponentBox(p, group, title){
+  const items = p[group].map((it, idx) => {
+    const changed = it.lastChangedAt ? ` • last: ${it.lastChangedBy || "?"} @ ${new Date(it.lastChangedAt).toLocaleString()}` : "";
+    return `
+      <div class="item">
+        <div class="left">
+          <input type="checkbox" ${it.active ? "checked" : ""} onchange="toggleActive(${p.id}, '${group}', ${idx}, this.checked)">
+          <div class="name">${it.name}</div>
+          <div class="tiny">${fmt(it.hours)}h</div>
+        </div>
+        <button onclick="resetItem(${p.id}, '${group}', ${idx})">Reset</button>
       </div>
-      <button onclick="resetItem(${i}, '${group}', ${idx})">Reset</button>
-    </div>
-  `).join("");
+      <div class="tiny muted" style="margin:-2px 0 6px 28px;">${changed}${it.lastComment ? ` • note: ${it.lastComment}` : ""}</div>
+    `;
+  }).join("");
 
   return `
     <div class="box">
       <div class="box-title">${title}</div>
-      ${list}
+      ${items}
     </div>
   `;
 }
 
-function pumpCard(i){
-  const p = state.pumps[i];
+function renderPumpCard(p){
+  const st = findStationByKey(p.stationKey);
+  const stationName = st?.name ?? p.stationKey;
   const totalNow = currentTotal(p);
 
   return `
-    <div class="pump-card ${p.running ? "running" : ""}">
-      <div class="row">
-        <strong>Pump ${p.id}</strong>
-        <span class="tiny">Side: ${p.side}</span>
-      </div>
-      <div>Status: ${p.running ? "Running" : "Stopped"}</div>
+    <div class="pump-card ${statusClass(p)}" draggable="true"
+         ondragstart="onDragStart(${p.id})" ondragend="onDragEnd()">
+      <div><strong>Pump ${p.id}</strong> <span class="muted">• ${stationName}</span></div>
+      <div>Status: <strong>${p.status}</strong> <span class="muted">${p.statusBy ? `• by ${p.statusBy}` : ""}</span></div>
+      ${p.statusComment ? `<div class="tiny muted">Note: ${p.statusComment}</div>` : ""}
       <div>Total Hours: <strong>${fmt(totalNow)}</strong></div>
 
       <div class="row">
-        <button onclick="startPump(${i})">Start</button>
-        <button onclick="stopPump(${i})">Stop</button>
-        <button onclick="pulledOut(${i})">Pulled Out</button>
+        <button onclick="startPumpById(${p.id}); save(); render();">Start</button>
+        <button onclick="stopPumpById(${p.id}); save(); render();">Stop</button>
       </div>
 
       <div class="row">
-        <button onclick="moveSide(${i}, 'Low')">Move → Low</button>
-        <button onclick="moveSide(${i}, 'High')">Move → High</button>
+        <button onclick="setStatus(findPump(${p.id}), 'Stopped')">Stopped</button>
+        <button onclick="setStatus(findPump(${p.id}), 'Offline')">Offline</button>
+        <button onclick="setStatus(findPump(${p.id}), 'PulledOut')">Pulled Out</button>
       </div>
 
       <div class="maint">
-        <div class="tiny">Maintenance (only checked items accrue hours)</div>
+        <div class="tiny">Maintenance (only checked items accrue hours while running)</div>
         <div class="maint-grid">
-          ${componentBox(i, "seats", "Seats (5)")}
-          ${componentBox(i, "valves", "Valves (5)")}
-          ${componentBox(i, "packings", "Packings (5)")}
-        </div>
-        <div class="tiny" style="margin-top:6px;">
-          Thresholds: Seat ${THRESH.seat}h • Valve ${THRESH.valve}h • Packing ${THRESH.packing}h • Warning window ${WARN_WINDOW}h
+          ${renderComponentBox(p, "seats", "Seats (5)")}
+          ${renderComponentBox(p, "valves", "Valves (5)")}
+          ${renderComponentBox(p, "packings", "Packings (5)")}
         </div>
       </div>
     </div>
   `;
 }
 
-function renderPumps(){
-  const low = document.getElementById("lowSide");
-  const high = document.getElementById("highSide");
-  low.innerHTML = "";
-  high.innerHTML = "";
+function renderStation(station){
+  const pump = station.pumpId ? findPump(station.pumpId) : null;
 
-  state.pumps.forEach((p, i) => {
-    const wrapper = document.createElement("div");
-    wrapper.innerHTML = pumpCard(i);
-    const cardEl = wrapper.firstElementChild;
+  return `
+    <div class="station">
+      <div class="station-header">
+        <div class="station-name">
+          <input value="${station.name}" oninput="editStationName('${station.key}', this.value)">
+        </div>
+        <div class="tiny muted">${station.key}</div>
+      </div>
 
-    if(p.side === "Low") low.appendChild(cardEl);
-    else high.appendChild(cardEl);
-  });
+      <div class="dropzone"
+        ondragover="onDragOver(event)"
+        ondragleave="onDragLeave(event)"
+        ondrop="onDrop(event, '${station.key}')">
+        ${pump ? renderPumpCard(pump) : `<div class="tiny muted">Drop a pump here</div>`}
+      </div>
+    </div>
+  `;
 }
 
 function render(){
-  renderPumps();
-  renderBoards();
+  const lowEl = document.getElementById("lowStations");
+  const highEl = document.getElementById("highStations");
+  lowEl.innerHTML = state.stations.low.map(renderStation).join("");
+  highEl.innerHTML = state.stations.high.map(renderStation).join("");
+}
+
+function tick(){
+  // Only rerender for live totals; don’t spam saves
+  render();
+}
+
+/* ------------------ OPTIONAL: RESET DEMO ------------------ */
+function resetAllDemo(){
+  const ok = confirm("This will wipe saved data on this browser and reset to defaults. Continue?");
+  if(!ok) return;
+  localStorage.removeItem(STORAGE_KEY);
+  state = {
+    pumps: Array.from({length: pumpCount}, (_, i) => createPump(i+1)),
+    stations: createStations(),
+    resetLog: []
+  };
+  save();
+  render();
 }
 
 /* ------------------ INIT ------------------ */
 load();
+// Ensure station->pump and pump->station are consistent
+(function reconcile(){
+  // If any station has a pump, ensure that pump references that station
+  [...state.stations.low, ...state.stations.high].forEach(st => {
+    if(st.pumpId){
+      const p = findPump(st.pumpId);
+      if(p) p.stationKey = st.key;
+    }
+  });
+  // If any pump points to a missing station, park it back to default
+  state.pumps.forEach(p => {
+    if(!findStationByKey(p.stationKey)){
+      p.stationKey = (p.id <= 12) ? `L${p.id}` : `H${p.id-12}`;
+    }
+  });
+  // Ensure every station has a pumpId if one exists at that stationKey
+  // (Keep existing)
+  save();
+})();
 render();
-setInterval(() => {
-  // Keep live totals updating while running without spamming saves
-  renderPumps();
-}, 1000);
+setInterval(tick, 1000);
 </script>
 
 </body>
