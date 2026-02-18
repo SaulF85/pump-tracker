@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <title>Frac Pump Tracker (Stations + DragDrop + Export)</title>
+  <title>Frac Pump Tracker (Stations + DragDrop + Warnings)</title>
   <meta charset="utf-8" />
   <style>
     body { font-family: Arial, sans-serif; background:#111; color:#fff; padding:16px; }
@@ -55,46 +55,41 @@
       border:1px solid #2a2a2a;
       border-radius:12px;
       padding:10px;
-      min-height:140px;
-    }
-
-    .station-header{
-      display:flex;
-      justify-content:space-between;
-      align-items:center;
-      gap:8px;
-      margin-bottom:8px;
-    }
-
-    .station-name{
-      font-weight:bold;
-      font-size:13px;
-      white-space:nowrap;
-      overflow:hidden;
-      text-overflow:ellipsis;
-      max-width: 70%;
-    }
-
-    .station-name input{
-      width: 100%;
-      padding:4px 6px;
-      border-radius:8px;
-      border:1px solid #333;
-      background:#121212;
-      color:#fff;
-      font-size:12px;
+      min-height:160px;
     }
 
     .dropzone{
       border:1px dashed #444;
       border-radius:10px;
       padding:8px;
-      min-height:88px;
+      min-height:120px;
       background:#141414;
     }
     .dropzone.dragover{
       border-color:#66ff66;
       background:#101810;
+    }
+
+    .station-top{
+      display:flex;
+      justify-content:space-between;
+      align-items:center;
+      gap:8px;
+      margin-bottom:8px;
+    }
+    .station-key{ font-size:11px; color:#888; }
+
+    /* Station name input is now inside the drag/drop area (per your request) */
+    .station-name-input{
+      width:100%;
+      padding:6px 8px;
+      border-radius:10px;
+      border:1px solid #333;
+      background:#101010;
+      color:#fff;
+      font-size:12px;
+      margin-bottom:8px;
+      box-sizing:border-box;
     }
 
     .pump-card{
@@ -106,8 +101,15 @@
       user-select:none;
     }
     .pump-card.running{ border:2px solid lime; }
+
+    /* Status colors */
     .pump-card.offline{ border:2px solid #ffcc00; }
     .pump-card.pulled{ border:2px solid #ff4d4d; }
+
+    /* Warning colors (maintenance) */
+    .pump-card.warnsoon{ box-shadow: 0 0 0 2px rgba(255, 204, 0, 0.6) inset; }
+    .pump-card.warnover{ box-shadow: 0 0 0 2px rgba(255, 77, 77, 0.7) inset; }
+
     .muted{ color:#aaa; }
     .row{ display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin-top:6px; }
     .tiny{ font-size:11px; color:#aaa; }
@@ -170,13 +172,13 @@
 <body>
 
 <h1>Frac Pump Tracker</h1>
-<div class="sub">24 pumps • Stations • Drag & Drop • Offline/Pulled comments • CSV export • Auto-saves</div>
+<div class="sub">24 pumps • Stations • Drag & Drop • Back Online • Start/Stop ALL only • Warnings integrated</div>
 
 <div class="toolbar">
   <button onclick="startAll()">Start ALL</button>
   <button onclick="stopAll()">Stop ALL</button>
   <button onclick="exportCSV()">Export CSV (Excel)</button>
-  <button onclick="resetAllDemo()">Reset Demo Data (optional)</button>
+  <button onclick="resetAllData()">Reset ALL Data (this browser)</button>
 </div>
 
 <div class="layout">
@@ -192,14 +194,18 @@
 </div>
 
 <div class="footer">
-  Tip: Drag a pump card to a different station to move it. “Offline” and “Pulled Out” will ask for a comment.
+  Drag a pump card to move it. Offline/Pulled Out prompts for who + why. Back Online clears status + comment.
 </div>
 
 <script>
 /* ------------------ SETTINGS ------------------ */
-const STORAGE_KEY = "frac_pump_tracker_stations_v1";
+const STORAGE_KEY = "frac_pump_tracker_stations_v2";
 const pumpCount = 24;
-const stationsPerSide = 12; // 12 low + 12 high = 24 stations
+const stationsPerSide = 12;
+
+/* Warnings (integrated) */
+const THRESH = { seat: 250, valve: 250, packing: 150 }; // hours
+const WARN_WINDOW = 20; // hours before threshold = "Due Soon"
 
 /* ------------------ DATA MODEL ------------------ */
 function createItems(label, count){
@@ -235,13 +241,13 @@ function createStations(){
     key: `L${i+1}`,
     side: "Low",
     name: `Low Station ${i+1}`,
-    pumpId: (i+1) // default Pump 1-12
+    pumpId: (i+1)
   }));
   const high = Array.from({length: stationsPerSide}, (_, i) => ({
     key: `H${i+1}`,
     side: "High",
     name: `High Station ${i+1}`,
-    pumpId: (i+13) // default Pump 13-24
+    pumpId: (i+13)
   }));
   return { low, high };
 }
@@ -249,7 +255,7 @@ function createStations(){
 let state = {
   pumps: Array.from({length: pumpCount}, (_, i) => createPump(i+1)),
   stations: createStations(),
-  resetLog: [] // {ts, pumpId, stationKey, itemLabel, by, comment}
+  resetLog: []
 };
 
 /* ------------------ PERSISTENCE ------------------ */
@@ -266,11 +272,9 @@ function load(){
 
     state = parsed;
 
-    // Patch any missing fields safely
-    if(!state.resetLog) state.resetLog = [];
+    state.resetLog ??= [];
     if(!state.stations.low || !state.stations.high) state.stations = createStations();
 
-    // Ensure pumps exist
     if(!Array.isArray(state.pumps) || state.pumps.length !== pumpCount){
       state.pumps = Array.from({length: pumpCount}, (_, i) => createPump(i+1));
     } else {
@@ -285,7 +289,6 @@ function load(){
         p.statusAt ??= null;
         p.stationKey ??= ((p.id <= 12) ? `L${p.id}` : `H${p.id-12}`);
 
-        // Ensure groups
         ["seats","valves","packings"].forEach(g=>{
           const label = g==="seats"?"Seat":g==="valves"?"Valve":"Packing";
           if(!Array.isArray(p[g]) || p[g].length !== 5){
@@ -310,14 +313,9 @@ function load(){
 
 /* ------------------ HELPERS ------------------ */
 function fmt(h){ return (Math.round(h*100)/100).toFixed(2); }
-
-function findPump(pumpId){
-  return state.pumps.find(p => p.id === pumpId);
-}
-function findStationByKey(key){
-  const all = [...state.stations.low, ...state.stations.high];
-  return all.find(s => s.key === key);
-}
+function findPump(pumpId){ return state.pumps.find(p => p.id === pumpId); }
+function allStations(){ return [...state.stations.low, ...state.stations.high]; }
+function findStationByKey(key){ return allStations().find(s => s.key === key); }
 
 function currentTotal(p){
   if(!p.running) return p.totalHours;
@@ -331,17 +329,75 @@ function addRunHours(p, hours){
   p.packings.forEach(x => { if(x.active) x.hours += hours; });
 }
 
-function setStatus(p, status){
-  // If switching away from running, stop first to capture hours
-  if(p.running && status !== "Running"){
-    stopPumpById(p.id);
-  }
+/* ------------------ WARNINGS ------------------ */
+function classifyMaintenance(p){
+  let overdue = 0;
+  let soon = 0;
 
-  const by = prompt(`Who is setting Pump ${p.id} to ${status}? (name/initials)`, "") || "";
-  let comment = "";
+  const check = (it, thresh) => {
+    if(!it.active) return;
+    const rem = thresh - it.hours;
+    if(rem <= 0) overdue++;
+    else if(rem <= WARN_WINDOW) soon++;
+  };
+
+  p.seats.forEach(it => check(it, THRESH.seat));
+  p.valves.forEach(it => check(it, THRESH.valve));
+  p.packings.forEach(it => check(it, THRESH.packing));
+
+  return { overdue, soon };
+}
+
+/* ------------------ STATUS + START/STOP (ALL only) ------------------ */
+function startPumpById(pumpId){
+  const p = findPump(pumpId);
+  if(!p) return;
+  if(p.status === "Offline" || p.status === "PulledOut") return;
+  if(p.running) return;
+  p.running = true;
+  p.lastStart = Date.now();
+  p.status = "Running";
+}
+function stopPumpById(pumpId){
+  const p = findPump(pumpId);
+  if(!p) return;
+  if(!p.running){
+    if(p.status === "Running") p.status = "Stopped";
+    return;
+  }
+  const hours = (Date.now() - p.lastStart) / (1000*60*60);
+  addRunHours(p, hours);
+  p.running = false;
+  p.lastStart = null;
+  if(p.status === "Running") p.status = "Stopped";
+}
+
+function startAll(){
+  state.pumps.forEach(p => {
+    if(p.status !== "Offline" && p.status !== "PulledOut") startPumpById(p.id);
+  });
+  save(); render();
+}
+function stopAll(){
+  state.pumps.forEach(p => stopPumpById(p.id));
+  save(); render();
+}
+
+function setStatus(pumpId, status){
+  const p = findPump(pumpId);
+  if(!p) return;
+
+  // If leaving running, capture hours
+  if(p.running && status !== "Running") stopPumpById(p.id);
+
+  const by = prompt(`Who is setting Pump ${p.id} to ${status}? (name/initials)`, p.statusBy || "") || "";
+  let comment = p.statusComment || "";
 
   if(status === "Offline" || status === "PulledOut"){
-    comment = prompt(`Reason/comment for Pump ${p.id} (${status}):`, p.statusComment || "") || "";
+    comment = prompt(`Reason/comment for Pump ${p.id} (${status}):`, comment) || "";
+  } else if (status === "Stopped") {
+    // optional
+    comment = p.statusComment || "";
   }
 
   p.status = status;
@@ -350,57 +406,24 @@ function setStatus(p, status){
   p.statusAt = Date.now();
 
   if(status === "Running"){
-    // start it (unless pulled/offline)
     startPumpById(p.id);
   } else if(status === "Stopped"){
-    // ensure stopped
     if(p.running) stopPumpById(p.id);
   }
 
-  save();
-  render();
+  save(); render();
 }
 
-/* ------------------ ACTIONS: START/STOP ------------------ */
-function startPumpById(pumpId){
+function backOnline(pumpId){
   const p = findPump(pumpId);
   if(!p) return;
-  if(p.status === "Offline" || p.status === "PulledOut") return;
-  if(p.running) return;
-
-  p.running = true;
-  p.lastStart = Date.now();
-  p.status = "Running";
-}
-function stopPumpById(pumpId){
-  const p = findPump(pumpId);
-  if(!p) return;
-  if(!p.running) {
-    if(p.status === "Running") p.status = "Stopped";
-    return;
-  }
-
-  const hours = (Date.now() - p.lastStart) / (1000*60*60);
-  addRunHours(p, hours);
-
-  p.running = false;
-  p.lastStart = null;
-  if(p.status === "Running") p.status = "Stopped";
-}
-
-function startAll(){
-  state.pumps.forEach(p => {
-    if(p.status !== "Offline" && p.status !== "PulledOut"){
-      startPumpById(p.id);
-    }
-  });
-  save();
-  render();
-}
-function stopAll(){
-  state.pumps.forEach(p => stopPumpById(p.id));
-  save();
-  render();
+  const by = prompt(`Who is putting Pump ${p.id} back online? (name/initials)`, "") || "";
+  p.status = "Stopped";
+  p.statusBy = by.trim();
+  p.statusComment = "";
+  p.statusAt = Date.now();
+  // do not auto-start; Start ALL handles that
+  save(); render();
 }
 
 /* ------------------ MAINTENANCE ------------------ */
@@ -432,57 +455,53 @@ function resetItem(pumpId, group, idx){
   });
   if(state.resetLog.length > 200) state.resetLog.pop();
 
-  save();
-  render();
+  save(); render();
 }
 
 /* ------------------ STATIONS / DRAG & DROP ------------------ */
 let dragPumpId = null;
 
-function onDragStart(pumpId){
-  dragPumpId = pumpId;
-}
-function onDragEnd(){
-  dragPumpId = null;
-}
-function onDragOver(ev){
-  ev.preventDefault();
-  ev.currentTarget.classList.add("dragover");
-}
-function onDragLeave(ev){
-  ev.currentTarget.classList.remove("dragover");
-}
+function onDragStart(pumpId){ dragPumpId = pumpId; }
+function onDragEnd(){ dragPumpId = null; }
+function onDragOver(ev){ ev.preventDefault(); ev.currentTarget.classList.add("dragover"); }
+function onDragLeave(ev){ ev.currentTarget.classList.remove("dragover"); }
+
 function onDrop(ev, stationKey){
   ev.preventDefault();
   ev.currentTarget.classList.remove("dragover");
-
   if(!dragPumpId) return;
+
   const movingPump = findPump(dragPumpId);
   const targetStation = findStationByKey(stationKey);
   if(!movingPump || !targetStation) return;
 
-  // Find current station of the moving pump
   const currentStation = findStationByKey(movingPump.stationKey);
-
-  // If target station has a pump, swap them
   const targetPumpId = targetStation.pumpId;
+
+  // swap if occupied
   if(targetPumpId && targetPumpId !== movingPump.id){
     const targetPump = findPump(targetPumpId);
-    // Swap station assignments
     targetPump.stationKey = currentStation.key;
     currentStation.pumpId = targetPump.id;
   }
 
-  // Move pump to target
-  if(currentStation) currentStation.pumpId = targetPumpId && targetPumpId !== movingPump.id ? targetPumpId : null;
+  // move
   movingPump.stationKey = targetStation.key;
   targetStation.pumpId = movingPump.id;
 
-  save();
-  render();
+  // if we swapped, targetStation already had a pump; otherwise clear original
+  if(currentStation && currentStation.key !== targetStation.key){
+    if(targetPumpId && targetPumpId !== movingPump.id){
+      // swapped; currentStation already set
+    } else {
+      currentStation.pumpId = null;
+    }
+  }
+
+  save(); render();
 }
 
-/* ------------------ STATION NAME EDIT ------------------ */
+/* Station name edit (inside dropzone now) */
 function editStationName(stationKey, newName){
   const s = findStationByKey(stationKey);
   if(!s) return;
@@ -490,7 +509,7 @@ function editStationName(stationKey, newName){
   save();
 }
 
-/* ------------------ EXPORT (CSV for Excel) ------------------ */
+/* ------------------ EXPORT CSV ------------------ */
 function csvEscape(val){
   const s = String(val ?? "");
   if(/[",\n]/.test(s)) return `"${s.replace(/"/g, '""')}"`;
@@ -498,13 +517,12 @@ function csvEscape(val){
 }
 
 function exportCSV(){
-  // Rows: Pump + status + station + totals + component hours + last change metadata
   const rows = [];
-
   const header = [
     "PumpID","StationKey","StationName","Side",
     "Status","StatusBy","StatusAt","StatusComment",
     "TotalPumpHours",
+    "OverdueCount","DueSoonCount",
     "Seat1Hours","Seat2Hours","Seat3Hours","Seat4Hours","Seat5Hours",
     "Valve1Hours","Valve2Hours","Valve3Hours","Valve4Hours","Valve5Hours",
     "Packing1Hours","Packing2Hours","Packing3Hours","Packing4Hours","Packing5Hours"
@@ -515,17 +533,15 @@ function exportCSV(){
     const st = findStationByKey(p.stationKey);
     const side = st?.side ?? "";
     const stName = st?.name ?? "";
+    const warn = classifyMaintenance(p);
 
     const row = [
-      p.id,
-      p.stationKey,
-      stName,
-      side,
-      p.status,
-      p.statusBy || "",
+      p.id, p.stationKey, stName, side,
+      p.status, p.statusBy || "",
       p.statusAt ? new Date(p.statusAt).toLocaleString() : "",
       p.statusComment || "",
-      fmt(currentTotal(p))
+      fmt(currentTotal(p)),
+      warn.overdue, warn.soon
     ];
 
     p.seats.forEach(it => row.push(fmt(it.hours)));
@@ -545,7 +561,6 @@ function exportCSV(){
   document.body.appendChild(a);
   a.click();
   document.body.removeChild(a);
-
   URL.revokeObjectURL(url);
 }
 
@@ -557,9 +572,16 @@ function statusClass(p){
   return "";
 }
 
+function warningClass(p){
+  const w = classifyMaintenance(p);
+  if(w.overdue > 0) return "warnover";
+  if(w.soon > 0) return "warnsoon";
+  return "";
+}
+
 function renderComponentBox(p, group, title){
   const items = p[group].map((it, idx) => {
-    const changed = it.lastChangedAt ? ` • last: ${it.lastChangedBy || "?"} @ ${new Date(it.lastChangedAt).toLocaleString()}` : "";
+    const changed = it.lastChangedAt ? `last: ${it.lastChangedBy || "?"} @ ${new Date(it.lastChangedAt).toLocaleString()}` : "";
     return `
       <div class="item">
         <div class="left">
@@ -569,7 +591,9 @@ function renderComponentBox(p, group, title){
         </div>
         <button onclick="resetItem(${p.id}, '${group}', ${idx})">Reset</button>
       </div>
-      <div class="tiny muted" style="margin:-2px 0 6px 28px;">${changed}${it.lastComment ? ` • note: ${it.lastComment}` : ""}</div>
+      <div class="tiny muted" style="margin:-2px 0 6px 28px;">
+        ${changed}${it.lastComment ? ` • note: ${it.lastComment}` : ""}
+      </div>
     `;
   }).join("");
 
@@ -583,26 +607,23 @@ function renderComponentBox(p, group, title){
 
 function renderPumpCard(p){
   const st = findStationByKey(p.stationKey);
-  const stationName = st?.name ?? p.stationKey;
   const totalNow = currentTotal(p);
+  const w = classifyMaintenance(p);
 
   return `
-    <div class="pump-card ${statusClass(p)}" draggable="true"
+    <div class="pump-card ${statusClass(p)} ${warningClass(p)}" draggable="true"
          ondragstart="onDragStart(${p.id})" ondragend="onDragEnd()">
-      <div><strong>Pump ${p.id}</strong> <span class="muted">• ${stationName}</span></div>
+      <div><strong>Pump ${p.id}</strong> <span class="muted">• ${st?.name ?? p.stationKey}</span></div>
       <div>Status: <strong>${p.status}</strong> <span class="muted">${p.statusBy ? `• by ${p.statusBy}` : ""}</span></div>
       ${p.statusComment ? `<div class="tiny muted">Note: ${p.statusComment}</div>` : ""}
       <div>Total Hours: <strong>${fmt(totalNow)}</strong></div>
+      <div class="tiny muted">Maintenance: Overdue ${w.overdue} • Due soon ${w.soon}</div>
 
       <div class="row">
-        <button onclick="startPumpById(${p.id}); save(); render();">Start</button>
-        <button onclick="stopPumpById(${p.id}); save(); render();">Stop</button>
-      </div>
-
-      <div class="row">
-        <button onclick="setStatus(findPump(${p.id}), 'Stopped')">Stopped</button>
-        <button onclick="setStatus(findPump(${p.id}), 'Offline')">Offline</button>
-        <button onclick="setStatus(findPump(${p.id}), 'PulledOut')">Pulled Out</button>
+        <button onclick="setStatus(${p.id}, 'Stopped')">Stopped</button>
+        <button onclick="setStatus(${p.id}, 'Offline')">Offline</button>
+        <button onclick="setStatus(${p.id}, 'PulledOut')">Pulled Out</button>
+        <button onclick="backOnline(${p.id})">Back Online</button>
       </div>
 
       <div class="maint">
@@ -611,6 +632,9 @@ function renderPumpCard(p){
           ${renderComponentBox(p, "seats", "Seats (5)")}
           ${renderComponentBox(p, "valves", "Valves (5)")}
           ${renderComponentBox(p, "packings", "Packings (5)")}
+        </div>
+        <div class="tiny muted" style="margin-top:6px;">
+          Thresholds: Seat ${THRESH.seat}h • Valve ${THRESH.valve}h • Packing ${THRESH.packing}h • Warn window ${WARN_WINDOW}h
         </div>
       </div>
     </div>
@@ -622,18 +646,22 @@ function renderStation(station){
 
   return `
     <div class="station">
-      <div class="station-header">
-        <div class="station-name">
-          <input value="${station.name}" oninput="editStationName('${station.key}', this.value)">
-        </div>
-        <div class="tiny muted">${station.key}</div>
+      <div class="station-top">
+        <div class="muted tiny">${station.side.toUpperCase()} STATION</div>
+        <div class="station-key">${station.key}</div>
       </div>
 
       <div class="dropzone"
         ondragover="onDragOver(event)"
         ondragleave="onDragLeave(event)"
         ondrop="onDrop(event, '${station.key}')">
-        ${pump ? renderPumpCard(pump) : `<div class="tiny muted">Drop a pump here</div>`}
+
+        <!-- Name edit is INSIDE the drag/drop box -->
+        <input class="station-name-input" value="${station.name}"
+               oninput="editStationName('${station.key}', this.value)"
+               placeholder="Station name (e.g., Manifold A / Pump Position 3)">
+
+        ${pump ? renderPumpCard(pump) : `<div class="tiny muted">Drop a pump card here</div>`}
       </div>
     </div>
   `;
@@ -646,48 +674,37 @@ function render(){
   highEl.innerHTML = state.stations.high.map(renderStation).join("");
 }
 
-function tick(){
-  // Only rerender for live totals; don’t spam saves
-  render();
+function reconcile(){
+  // station -> pump consistency
+  allStations().forEach(st => {
+    if(st.pumpId){
+      const p = findPump(st.pumpId);
+      if(p) p.stationKey = st.key;
+    }
+  });
+  // pumps pointing at missing station -> default
+  state.pumps.forEach(p => {
+    if(!findStationByKey(p.stationKey)){
+      p.stationKey = (p.id <= 12) ? `L${p.id}` : `H${p.id-12}`;
+    }
+  });
+  save();
 }
 
-/* ------------------ OPTIONAL: RESET DEMO ------------------ */
-function resetAllDemo(){
-  const ok = confirm("This will wipe saved data on this browser and reset to defaults. Continue?");
+function resetAllData(){
+  const ok = confirm("This wipes saved data on THIS browser and resets defaults. Continue?");
   if(!ok) return;
   localStorage.removeItem(STORAGE_KEY);
-  state = {
-    pumps: Array.from({length: pumpCount}, (_, i) => createPump(i+1)),
-    stations: createStations(),
-    resetLog: []
-  };
+  state = { pumps: Array.from({length: pumpCount}, (_, i) => createPump(i+1)), stations: createStations(), resetLog: [] };
   save();
   render();
 }
 
 /* ------------------ INIT ------------------ */
 load();
-// Ensure station->pump and pump->station are consistent
-(function reconcile(){
-  // If any station has a pump, ensure that pump references that station
-  [...state.stations.low, ...state.stations.high].forEach(st => {
-    if(st.pumpId){
-      const p = findPump(st.pumpId);
-      if(p) p.stationKey = st.key;
-    }
-  });
-  // If any pump points to a missing station, park it back to default
-  state.pumps.forEach(p => {
-    if(!findStationByKey(p.stationKey)){
-      p.stationKey = (p.id <= 12) ? `L${p.id}` : `H${p.id-12}`;
-    }
-  });
-  // Ensure every station has a pumpId if one exists at that stationKey
-  // (Keep existing)
-  save();
-})();
+reconcile();
 render();
-setInterval(tick, 1000);
+setInterval(render, 1000); // live totals update
 </script>
 
 </body>
