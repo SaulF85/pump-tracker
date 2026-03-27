@@ -73,7 +73,7 @@
       border:1px solid #2a2a2a;
       border-radius:12px;
       padding:10px;
-      min-height:190px;
+      min-height:200px;
     }
 
     .station-header{
@@ -235,7 +235,7 @@
 <body>
 
 <h1>Frac Pump Tracker</h1>
-<div class="sub">10 seats • 10 valves • hard/soft packings • dropdown maintenance view • major issue flag • easier pump moves</div>
+<div class="sub">10 seats • 10 valves • hard/soft packings • fuel filters • dropdown maintenance view • major issue flag • easier pump moves</div>
 
 <div class="toolbar">
   <button onclick="startAll()">Start ALL</button>
@@ -275,7 +275,7 @@
 </div>
 
 <div class="footer">
-  Fixed station numbers stay in place. Pump names move with the pump. Comments are saved with stage number. Major issue comments export with a red-highlight marker column.
+  Fixed station numbers stay in place. Pump names move with the pump. Main station names now appear in the station title. Major issue comments export with a red-highlight marker column.
 </div>
 
 <script>
@@ -284,7 +284,7 @@ const stationsPerSide = 12;
 const standbySlotsLow = 3;
 const standbySlotsHigh = 3;
 const pumpCount = 24 + standbySlotsLow + standbySlotsHigh;
-const THRESH = { seat: 250, valve: 250, hardPacking: 150, softPacking: 150 };
+const THRESH = { seat: 250, valve: 250, hardPacking: 150, softPacking: 150, fuelFilter: 150 };
 const WARN_WINDOW = 20;
 
 function createItems(label, count){
@@ -310,7 +310,7 @@ function createPump(id){
     statusComment: "",
     statusAt: null,
     stationKey: null,
-    shiftCounts: { seats: 0, valves: 0, hardPackings: 0, softPackings: 0 },
+    shiftCounts: { seats: 0, valves: 0, hardPackings: 0, softPackings: 0, fuelFilters: 0 },
     uiSelection: "seats",
     currentComment: "",
     currentCommentMajor: false,
@@ -318,8 +318,16 @@ function createPump(id){
     valves: createItems("Valve", 10),
     hardPackings: createItems("Hard Packing", 5),
     softPackings: createItems("Soft Packing", 5),
+    fuelFilters: createItems("Fuel Filter", 6),
     events: []
   };
+}
+
+function buildDisplayTitle(station){
+  if(station.stationNum){
+    return `${station.side.toUpperCase()} • STATION ${station.stationNum} • ${station.name}`;
+  }
+  return `${station.side.toUpperCase()} • STANDBY • ${station.name}`;
 }
 
 function createStations(){
@@ -329,7 +337,7 @@ function createStations(){
     stationNum: i + 1,
     name: `Low Location ${i+1}`,
     pumpId: (i + 1)
-  }));
+  })).map(s => ({ ...s, displayTitle: buildDisplayTitle(s) }));
 
   const highMain = Array.from({length: stationsPerSide}, (_, i) => ({
     key: `H${i+1}`,
@@ -337,7 +345,7 @@ function createStations(){
     stationNum: i + 13,
     name: `High Location ${i+1}`,
     pumpId: (i + 13)
-  }));
+  })).map(s => ({ ...s, displayTitle: buildDisplayTitle(s) }));
 
   const lowStandby = Array.from({length: standbySlotsLow}, (_, i) => ({
     key: `LSB${i+1}`,
@@ -345,7 +353,7 @@ function createStations(){
     stationNum: null,
     name: `Low Standby ${i+1}`,
     pumpId: (24 + i + 1)
-  }));
+  })).map(s => ({ ...s, displayTitle: buildDisplayTitle(s) }));
 
   const highStandby = Array.from({length: standbySlotsHigh}, (_, i) => ({
     key: `HSB${i+1}`,
@@ -353,7 +361,7 @@ function createStations(){
     stationNum: null,
     name: `High Standby ${i+1}`,
     pumpId: (24 + standbySlotsLow + i + 1)
-  }));
+  })).map(s => ({ ...s, displayTitle: buildDisplayTitle(s) }));
 
   return { lowMain, highMain, lowStandby, highStandby };
 }
@@ -362,58 +370,12 @@ let state = {
   pumps: Array.from({length: pumpCount}, (_, i) => createPump(i+1)),
   stations: createStations(),
   stage: { number: 1, notes: [] },
-  shift: { startedAt: Date.now(), seats: 0, valves: 0, hardPackings: 0, softPackings: 0 },
+  shift: { startedAt: Date.now(), seats: 0, valves: 0, hardPackings: 0, softPackings: 0, fuelFilters: 0 },
   globalEvents: []
 };
 
 function save(){
   try { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); } catch(e){ console.warn(e); }
-}
-
-function load(){
-  try{
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if(!raw) return;
-    const parsed = JSON.parse(raw);
-    if(!parsed || !Array.isArray(parsed.pumps) || !parsed.stations) return;
-    state = parsed;
-
-    if(!state.stations.lowMain) state.stations = createStations();
-    state.stage ??= { number: 1, notes: [] };
-    state.stage.notes ??= [];
-    state.shift ??= { startedAt: Date.now(), seats: 0, valves: 0, hardPackings: 0, softPackings: 0 };
-    state.globalEvents ??= [];
-
-    if(!Array.isArray(state.pumps) || state.pumps.length !== pumpCount){
-      const rebuilt = Array.from({length: pumpCount}, (_, i) => createPump(i+1));
-      if(Array.isArray(state.pumps)){
-        for(let i=0; i<Math.min(state.pumps.length, rebuilt.length); i++) rebuilt[i] = Object.assign(rebuilt[i], state.pumps[i]);
-      }
-      state.pumps = rebuilt;
-    }
-
-    state.pumps.forEach((p, idx) => {
-      p.id ??= idx+1;
-      p.pumpName ??= "";
-      p.totalHours ??= 0;
-      p.running ??= false;
-      p.lastStart ??= null;
-      p.status ??= "Stopped";
-      p.statusBy ??= "";
-      p.statusComment ??= "";
-      p.statusAt ??= null;
-      p.stationKey ??= null;
-      p.shiftCounts ??= { seats: 0, valves: 0, hardPackings: 0, softPackings: 0 };
-      p.uiSelection ??= "seats";
-      p.currentComment ??= "";
-      p.currentCommentMajor ??= false;
-      p.seats = patchItems(p.seats, "Seat", 10);
-      p.valves = patchItems(p.valves, "Valve", 10);
-      p.hardPackings = patchItems(p.hardPackings, "Hard Packing", 5);
-      p.softPackings = patchItems(p.softPackings, "Soft Packing", 5);
-      p.events ??= [];
-    });
-  }catch(e){ console.warn(e); }
 }
 
 function patchItems(arr, label, count){
@@ -429,11 +391,64 @@ function patchItems(arr, label, count){
   return arr;
 }
 
-function fmt(h){ return (Math.round(h * 100) / 100).toFixed(2); }
-function nowStr(ts){ return new Date(ts).toLocaleString(); }
 function allStations(){ const s = state.stations; return [...s.lowMain, ...s.highMain, ...s.lowStandby, ...s.highStandby]; }
 function findStationByKey(key){ return allStations().find(s => s.key === key); }
 function findPump(id){ return state.pumps.find(p => p.id === id); }
+function fmt(h){ return (Math.round(h * 100) / 100).toFixed(2); }
+function nowStr(ts){ return new Date(ts).toLocaleString(); }
+
+function load(){
+  try{
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if(!raw) return;
+    const parsed = JSON.parse(raw);
+    if(!parsed || !Array.isArray(parsed.pumps) || !parsed.stations) return;
+    state = parsed;
+
+    if(!state.stations.lowMain) state.stations = createStations();
+    state.stage ??= { number: 1, notes: [] };
+    state.stage.notes ??= [];
+    state.shift ??= { startedAt: Date.now(), seats: 0, valves: 0, hardPackings: 0, softPackings: 0, fuelFilters: 0 };
+    state.shift.fuelFilters ??= 0;
+    state.globalEvents ??= [];
+
+    if(!Array.isArray(state.pumps) || state.pumps.length !== pumpCount){
+      const rebuilt = Array.from({length: pumpCount}, (_, i) => createPump(i+1));
+      if(Array.isArray(state.pumps)){
+        for(let i=0; i<Math.min(state.pumps.length, rebuilt.length); i++) rebuilt[i] = Object.assign(rebuilt[i], state.pumps[i]);
+      }
+      state.pumps = rebuilt;
+    }
+
+    allStations().forEach(st => {
+      st.displayTitle = buildDisplayTitle(st);
+    });
+
+    state.pumps.forEach((p, idx) => {
+      p.id ??= idx+1;
+      p.pumpName ??= "";
+      p.totalHours ??= 0;
+      p.running ??= false;
+      p.lastStart ??= null;
+      p.status ??= "Stopped";
+      p.statusBy ??= "";
+      p.statusComment ??= "";
+      p.statusAt ??= null;
+      p.stationKey ??= null;
+      p.shiftCounts ??= { seats: 0, valves: 0, hardPackings: 0, softPackings: 0, fuelFilters: 0 };
+      p.shiftCounts.fuelFilters ??= 0;
+      p.uiSelection ??= "seats";
+      p.currentComment ??= "";
+      p.currentCommentMajor ??= false;
+      p.seats = patchItems(p.seats, "Seat", 10);
+      p.valves = patchItems(p.valves, "Valve", 10);
+      p.hardPackings = patchItems(p.hardPackings, "Hard Packing", 5);
+      p.softPackings = patchItems(p.softPackings, "Soft Packing", 5);
+      p.fuelFilters = patchItems(p.fuelFilters, "Fuel Filter", 6);
+      p.events ??= [];
+    });
+  }catch(e){ console.warn(e); }
+}
 
 function currentTotal(p){
   if(!p.running) return p.totalHours;
@@ -446,6 +461,7 @@ function addRunHours(p, hours){
   p.valves.forEach(x => { if(x.active) x.hours += hours; });
   p.hardPackings.forEach(x => { if(x.active) x.hours += hours; });
   p.softPackings.forEach(x => { if(x.active) x.hours += hours; });
+  p.fuelFilters.forEach(x => { if(x.active) x.hours += hours; });
 }
 
 function classifyMaintenance(p){
@@ -460,6 +476,7 @@ function classifyMaintenance(p){
   p.valves.forEach(it => check(it, THRESH.valve));
   p.hardPackings.forEach(it => check(it, THRESH.hardPacking));
   p.softPackings.forEach(it => check(it, THRESH.softPacking));
+  p.fuelFilters.forEach(it => check(it, THRESH.fuelFilter));
   return { overdue, soon };
 }
 
@@ -477,8 +494,8 @@ function addGlobalEvent(type, by, comment, details={}){
 
 function newShift(){
   if(!confirm("Start a new shift? This resets only shift counters.")) return;
-  state.shift = { startedAt: Date.now(), seats: 0, valves: 0, hardPackings: 0, softPackings: 0 };
-  state.pumps.forEach(p => { p.shiftCounts = { seats: 0, valves: 0, hardPackings: 0, softPackings: 0 }; });
+  state.shift = { startedAt: Date.now(), seats: 0, valves: 0, hardPackings: 0, softPackings: 0, fuelFilters: 0 };
+  state.pumps.forEach(p => { p.shiftCounts = { seats: 0, valves: 0, hardPackings: 0, softPackings: 0, fuelFilters: 0 }; });
   const by = prompt("Who started the new shift?", "") || "";
   addGlobalEvent("SHIFT_START", by, "New shift started", {});
   save();
@@ -500,7 +517,16 @@ function editPumpName(pumpId, name){
   }
 }
 
-function editStationName(stationKey, newName){ const s = findStationByKey(stationKey); if(!s) return; s.name = newName; save(); }
+function editStationName(stationKey, newName){
+  const s = findStationByKey(stationKey);
+  if(!s) return;
+  s.name = newName;
+  s.displayTitle = buildDisplayTitle(s);
+  save();
+  const titleEl = document.getElementById(`stationTitle-${s.key}`);
+  if(titleEl) titleEl.textContent = s.displayTitle;
+}
+
 function setMaintenanceView(pumpId, value){ const p = findPump(pumpId); if(!p) return; p.uiSelection = value; save(); render(); }
 function updateCurrentComment(pumpId, text){ const p = findPump(pumpId); if(!p) return; p.currentComment = text; save(); }
 function updateCurrentCommentMajor(pumpId, checked){ const p = findPump(pumpId); if(!p) return; p.currentCommentMajor = checked; save(); }
@@ -568,6 +594,7 @@ function incShiftCounter(group){
   if(group === "valves") state.shift.valves += 1;
   if(group === "hardPackings") state.shift.hardPackings += 1;
   if(group === "softPackings") state.shift.softPackings += 1;
+  if(group === "fuelFilters") state.shift.fuelFilters += 1;
 }
 
 function resetItem(pumpId, group, idx){
@@ -622,18 +649,20 @@ function movePumpToStation(pumpId, stationKey){
 
 function onDrop(ev, stationKey){ ev.preventDefault(); ev.currentTarget.classList.remove("dragover"); if(!dragPumpId) return; movePumpToStation(dragPumpId, stationKey); }
 
-function csvEscape(val){ const s = String(val ?? ""); if(/[",\n]/.test(s)) return `"${s.replace(/"/g, '""')}"`; return s; }
+function csvEscape(val){ const s = String(val ?? ""); if(/[",
+]/.test(s)) return `"${s.replace(/"/g, '""')}"`; return s; }
 
 function exportCSV(){
   const rows = [];
   rows.push([
-    "Stage","ShiftStartedAt","ShiftSeatChanges","ShiftValveChanges","ShiftHardPackingChanges","ShiftSoftPackingChanges",
+    "Stage","ShiftStartedAt","ShiftSeatChanges","ShiftValveChanges","ShiftHardPackingChanges","ShiftSoftPackingChanges","ShiftFuelFilterChanges",
     "StationNum","StationKey","Side","StationName","PumpID","PumpName","Status","StatusBy","StatusAt","StatusComment",
-    "MajorIssueFlag","ExcelHighlightRed","TotalPumpHours","ShiftPumpSeatChanges","ShiftPumpValveChanges","ShiftPumpHardPackingChanges","ShiftPumpSoftPackingChanges",
+    "MajorIssueFlag","ExcelHighlightRed","TotalPumpHours","ShiftPumpSeatChanges","ShiftPumpValveChanges","ShiftPumpHardPackingChanges","ShiftPumpSoftPackingChanges","ShiftPumpFuelFilterChanges",
     ...Array.from({length:10}, (_,i)=>`Seat${i+1}Hours`),
     ...Array.from({length:10}, (_,i)=>`Valve${i+1}Hours`),
     ...Array.from({length:5}, (_,i)=>`HardPacking${i+1}Hours`),
-    ...Array.from({length:5}, (_,i)=>`SoftPacking${i+1}Hours`)
+    ...Array.from({length:5}, (_,i)=>`SoftPacking${i+1}Hours`),
+    ...Array.from({length:6}, (_,i)=>`FuelFilter${i+1}Hours`)
   ]);
 
   state.pumps.forEach(p => {
@@ -646,6 +675,7 @@ function exportCSV(){
       state.shift.valves,
       state.shift.hardPackings,
       state.shift.softPackings,
+      state.shift.fuelFilters,
       st?.stationNum ?? "",
       st?.key ?? p.stationKey,
       st?.side ?? "",
@@ -662,16 +692,19 @@ function exportCSV(){
       p.shiftCounts.seats,
       p.shiftCounts.valves,
       p.shiftCounts.hardPackings,
-      p.shiftCounts.softPackings
+      p.shiftCounts.softPackings,
+      p.shiftCounts.fuelFilters
     ];
     p.seats.forEach(it => row.push(fmt(it.hours)));
     p.valves.forEach(it => row.push(fmt(it.hours)));
     p.hardPackings.forEach(it => row.push(fmt(it.hours)));
     p.softPackings.forEach(it => row.push(fmt(it.hours)));
+    p.fuelFilters.forEach(it => row.push(fmt(it.hours)));
     rows.push(row);
   });
 
-  const csv = rows.map(r => r.map(csvEscape).join(",")).join("\n");
+  const csv = rows.map(r => r.map(csvEscape).join(",")).join("
+");
   const blob = new Blob([csv], {type:"text/csv;charset=utf-8;"});
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
@@ -698,7 +731,8 @@ function exportLogsCSV(){
       ]);
     });
   });
-  const csv = rows.map(r => r.map(csvEscape).join(",")).join("\n");
+  const csv = rows.map(r => r.map(csvEscape).join(",")).join("
+");
   const blob = new Blob([csv], {type:"text/csv;charset=utf-8;"});
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
@@ -737,7 +771,8 @@ function renderSelectedMaintenance(p){
   if(p.uiSelection === "seats") return renderComponentList(p, "seats", "Seats (10)");
   if(p.uiSelection === "valves") return renderComponentList(p, "valves", "Valves (10)");
   if(p.uiSelection === "hardPackings") return renderComponentList(p, "hardPackings", "Hard Packings (5)");
-  return renderComponentList(p, "softPackings", "Soft Packings (5)");
+  if(p.uiSelection === "softPackings") return renderComponentList(p, "softPackings", "Soft Packings (5)");
+  return renderComponentList(p, "fuelFilters", "Fuel Filters (6)");
 }
 
 function renderPumpCard(p){
@@ -788,8 +823,9 @@ function renderPumpCard(p){
             <option value="valves" ${p.uiSelection === "valves" ? "selected" : ""}>Valves</option>
             <option value="hardPackings" ${p.uiSelection === "hardPackings" ? "selected" : ""}>Hard Packings</option>
             <option value="softPackings" ${p.uiSelection === "softPackings" ? "selected" : ""}>Soft Packings</option>
+            <option value="fuelFilters" ${p.uiSelection === "fuelFilters" ? "selected" : ""}>Fuel Filters</option>
           </select>
-          <div class="tiny muted">Shift changes: S ${p.shiftCounts.seats} • V ${p.shiftCounts.valves} • HP ${p.shiftCounts.hardPackings} • SP ${p.shiftCounts.softPackings}</div>
+          <div class="tiny muted">Shift changes: S ${p.shiftCounts.seats} • V ${p.shiftCounts.valves} • HP ${p.shiftCounts.hardPackings} • SP ${p.shiftCounts.softPackings} • FF ${p.shiftCounts.fuelFilters}</div>
         </div>
         ${renderSelectedMaintenance(p)}
       </div>
@@ -814,13 +850,13 @@ function renderPumpCard(p){
 function renderStation(station){
   const pump = station.pumpId ? findPump(station.pumpId) : null;
   const pumpDisplay = pump ? (pump.pumpName ? pump.pumpName : `Pump ${pump.id}`) : "— empty —";
-  const headerTitle = station.stationNum ? `${station.side.toUpperCase()} • STATION ${station.stationNum}` : `${station.side.toUpperCase()} • STANDBY`;
+  const headerTitle = station.displayTitle || buildDisplayTitle(station);
 
   return `
     <div class="station">
       <div class="station-header">
         <div>
-          <div class="station-title">${headerTitle}</div>
+          <div class="station-title" id="stationTitle-${station.key}">${headerTitle}</div>
           <div class="station-current">Current Pump: <strong id="currentPump-${station.key}">${pumpDisplay}</strong></div>
         </div>
         <div class="station-meta">${station.key}</div>
@@ -829,7 +865,7 @@ function renderStation(station){
       <input class="station-name-input"
              value="${station.name}"
              oninput="editStationName('${station.key}', this.value)"
-             placeholder="Station name / location name">
+             placeholder="Main station / location name">
 
       <div class="dropzone"
         ondragover="onDragOver(event)"
@@ -847,6 +883,7 @@ function renderTopPanels(){
     <span>Valves changed: <strong>${state.shift.valves}</strong></span>
     <span>Hard packings changed: <strong>${state.shift.hardPackings}</strong></span>
     <span>Soft packings changed: <strong>${state.shift.softPackings}</strong></span>
+    <span>Fuel filters changed: <strong>${state.shift.fuelFilters}</strong></span>
   `;
   document.getElementById("shiftMeta").textContent = `Shift started: ${nowStr(state.shift.startedAt)}`;
   document.getElementById("stageSummary").innerHTML = `
@@ -873,6 +910,7 @@ function updateLiveTotalsOnly(){
 
 function reconcile(){
   allStations().forEach(st => {
+    st.displayTitle = buildDisplayTitle(st);
     if(st.pumpId){
       const p = findPump(st.pumpId);
       if(p) p.stationKey = st.key;
@@ -894,7 +932,7 @@ function resetAllData(){
     pumps: Array.from({length: pumpCount}, (_, i) => createPump(i+1)),
     stations: createStations(),
     stage: { number: 1, notes: [] },
-    shift: { startedAt: Date.now(), seats: 0, valves: 0, hardPackings: 0, softPackings: 0 },
+    shift: { startedAt: Date.now(), seats: 0, valves: 0, hardPackings: 0, softPackings: 0, fuelFilters: 0 },
     globalEvents: []
   };
   reconcile();
